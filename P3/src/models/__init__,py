@@ -1,0 +1,111 @@
+
+
+__all__ = ['User', 'Signal', 'Simulation']
+
+
+if __name__ == "__main__":
+    # Ejemplo de uso de los modelos
+    print("=== Modelos de Datos CDMA ===\n")
+    
+    # Ejemplo 1: Crear simulación
+    print("Ejemplo 1: Crear simulación")
+    print("-" * 60)
+    
+    sim = Simulation(
+        n_users=3,
+        n_bits=8,
+        code_type='walsh',
+        decoder_rate=1.0
+    )
+    
+    print(f"Simulación creada: {sim.simulation_id}")
+    print(f"Parámetros: {sim.n_users} usuarios, {sim.n_bits} bits")
+    print(f"Estado: {sim}")
+    
+    # Ejemplo 2: Inicializar usuarios con códigos
+    print("\n" + "=" * 60)
+    print("Ejemplo 2: Inicializar usuarios")
+    print("-" * 60)
+    
+    codes = np.array([
+        [ 1,  1,  1,  1],
+        [ 1, -1,  1, -1],
+        [ 1,  1, -1, -1]
+    ])
+    
+    sim.initialize_users(codes)
+    
+    for user in sim.users:
+        print(f"  {user.label}: Código de {user.code_length} chips")
+    
+    # Ejemplo 3: Asignar mensajes
+    print("\n" + "=" * 60)
+    print("Ejemplo 3: Asignar mensajes")
+    print("-" * 60)
+    
+    messages = np.array([
+        [1, 0, 1, 0, 1, 0, 1, 0],
+        [0, 1, 1, 0, 0, 1, 1, 0],
+        [1, 1, 0, 1, 1, 0, 0, 1]
+    ])
+    
+    sim.set_messages(messages)
+    
+    for user in sim.users:
+        print(f"  {user.label}: {user.original_message}")
+    
+    # Ejemplo 4: Señales codificadas
+    print("\n" + "=" * 60)
+    print("Ejemplo 4: Señales codificadas")
+    print("-" * 60)
+    
+    # Simular codificación
+    def simple_encode(msg, code):
+        msg_bipolar = 2 * msg - 1
+        return np.repeat(msg_bipolar, len(code)) * np.tile(code, len(msg))
+    
+    signals = np.array([simple_encode(messages[i], codes[i]) for i in range(3)])
+    total_signal = np.sum(signals, axis=0)
+    
+    sim.set_encoded_signals(signals, total_signal)
+    
+    print(f"Señales codificadas asignadas")
+    print(f"Señal total: {sim.total_signal}")
+    
+    # Ejemplo 5: Decodificación
+    print("\n" + "=" * 60)
+    print("Ejemplo 5: Decodificación")
+    print("-" * 60)
+    
+    # Simular decodificación perfecta (sin errores)
+    decoded_messages = messages.copy()
+    # Introducir error en usuario 2
+    decoded_messages[1][2] = 1 - decoded_messages[1][2]
+    
+    sim.set_decoded_messages(decoded_messages)
+    
+    print("Resultados de decodificación:")
+    for user in sim.users:
+        ber = user.calculate_ber()
+        print(f"  {user.label}: BER = {ber:.4f}")
+    
+    # Ejemplo 6: Métricas globales
+    print("\n" + "=" * 60)
+    print("Ejemplo 6: Métricas globales")
+    print("-" * 60)
+    
+    print(f"BER promedio: {sim.metrics['average_ber']:.4f}")
+    print(f"Total de bits: {sim.metrics['total_bits']}")
+    print(f"Total de errores: {sim.metrics['total_errors']}")
+    print(f"Usuarios perfectos: {sim.metrics['perfect_users']}")
+    
+    # Ejemplo 7: Resumen completo
+    print("\n" + "=" * 60)
+    print("Ejemplo 7: Resumen de simulación")
+    print("-" * 60)
+    
+    summary = sim.get_summary()
+    print(f"ID: {summary['simulation_id']}")
+    print(f"Parámetros: {summary['parameters']}")
+    print(f"Estado: {summary['status']}")
+    print(f"Métricas: {summary['metrics']}")
