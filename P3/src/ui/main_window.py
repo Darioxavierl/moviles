@@ -166,7 +166,7 @@ class MainWindow(QMainWindow):
         code_len_layout = QHBoxLayout()
         code_len_layout.addWidget(QLabel("Longitud de Código:"))
         self.spin_code_length = QSpinBox()
-        self.spin_code_length.setRange(2, 128)
+        self.spin_code_length.setRange(2, 1024)
         self.spin_code_length.setValue(8)
         self.spin_code_length.setToolTip("Número de chips por bit (factor de esparcimiento)")
         code_len_layout.addWidget(self.spin_code_length)
@@ -336,7 +336,7 @@ class MainWindow(QMainWindow):
         
         # Tab 4: Análisis
         tab_analysis = self._create_analysis_tab()
-        self.tabs.addTab(tab_analysis, "🔍 Análisis Detallado")
+        #self.tabs.addTab(tab_analysis, "🔍 Análisis Detallado")
         
         layout.addWidget(self.tabs)
         
@@ -432,16 +432,6 @@ class MainWindow(QMainWindow):
                 codes = self.code_generator.generate_walsh_codes(max(n_users, code_length))
                 # Recortar a n_users y code_length
                 codes = codes[:n_users, :code_length]
-            else:  # gold
-                codes = self.code_generator.generate_gold_codes(n_users, length=code_length)
-                # Ajustar longitud si es necesario
-                if codes.shape[1] != code_length:
-                    # Recortar o rellenar
-                    if codes.shape[1] > code_length:
-                        codes = codes[:, :code_length]
-                    else:
-                        padding = np.tile(codes, (1, (code_length // codes.shape[1]) + 1))
-                        codes = padding[:, :code_length]
             
             # Verificar ortogonalidad
             is_ortho, corr_matrix = self.code_generator.verify_orthogonality(codes)
@@ -581,8 +571,8 @@ class MainWindow(QMainWindow):
             # if self.check_enable_noise.isChecked():
             #snr_db = self.spin_snr.value()
             snr_db = self._default_snr_db
-            noisy_signal = self.encoder.add_noise(signal_to_decode, snr_db)
-            self.simulation.set_noisy_signal(noisy_signal, snr_db)
+            #noisy_signal = self.encoder.add_noise(signal_to_decode, snr_db)
+            #self.simulation.set_noisy_signal(noisy_signal, snr_db)
             #signal_to_decode = noisy_signal
             
             # Actualizar umbral del decodificador
@@ -611,7 +601,7 @@ class MainWindow(QMainWindow):
             self._update_results_table()
             
             # Actualizar análisis
-            self._update_analysis()
+            #self._update_analysis()
             
         except Exception as e:
             self._show_error("Error decodificando señales", e)
@@ -630,7 +620,7 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage("Simulación completa ejecutada exitosamente")
             
             # Cambiar a tab de resultados
-            self.tabs.setCurrentIndex(2)
+            self.tabs.setCurrentIndex(1)
             
         except Exception as e:
             self._show_error("Error en simulación completa", e)
@@ -753,7 +743,7 @@ class MainWindow(QMainWindow):
     def _on_users_changed(self, value):
         """Callback cuando cambia el número de usuarios."""
         # Para Walsh, sugerir longitud de código >= n_users
-        code_type = self.combo_code_type.currentText().lower()
+        code_type = self.combo_code_type.lower()
         if code_type == 'walsh':
             # Sugerir la siguiente potencia de 2
             suggested_length = 2 ** int(np.ceil(np.log2(max(value, self.spin_code_length.value()))))
