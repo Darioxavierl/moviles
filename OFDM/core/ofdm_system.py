@@ -12,17 +12,42 @@ from config.lte_params import LTEConfig
 class OFDMSystem:
     """Sistema OFDM completo que integra todos los componentes"""
     
-    def __init__(self, config):
+    def __init__(self, config, channel_type='awgn', itu_profile='Vehicular_A', 
+                 frequency_ghz=None, velocity_kmh=None):
         """
         Inicializa el sistema OFDM
         
         Args:
             config: Objeto LTEConfig con parámetros de configuración
+            channel_type: 'awgn' o 'rayleigh_mp'
+            itu_profile: Perfil ITU para Rayleigh (si aplica)
+            frequency_ghz: Frecuencia portadora en GHz (para Rayleigh)
+            velocity_kmh: Velocidad en km/h (para Rayleigh)
         """
         self.config = config
         self.modulator = OFDMModulator(config)
         self.demodulator = OFDMDemodulator(config)
-        self.channel = ChannelSimulator('awgn', snr_db=10.0)
+        self.channel_type = channel_type
+        self.itu_profile = itu_profile
+        self.frequency_ghz = frequency_ghz
+        self.velocity_kmh = velocity_kmh
+        
+        # Calcular Fs desde config
+        fs = config.fs if hasattr(config, 'fs') else 15.36e6  # LTE default
+        
+        # Inicializar canal
+        if channel_type == 'rayleigh_mp':
+            self.channel = ChannelSimulator(
+                channel_type='rayleigh_mp',
+                snr_db=10.0,
+                fs=fs,
+                itu_profile=itu_profile,
+                frequency_ghz=frequency_ghz,
+                velocity_kmh=velocity_kmh
+            )
+        else:
+            self.channel = ChannelSimulator('awgn', snr_db=10.0)
+        
         self.symbol_detector = SymbolDetector(
             self.modulator.get_qam_modulator().get_constellation()
         )
@@ -37,13 +62,107 @@ class OFDMSystem:
             'transmission_time': 0
         }
     
+    def calculate_papr(self, signal):
+        """
+        Calcula el PAPR (Peak-to-Average Power Ratio) de una señal OFDM
+        
+        PAPR = Potencia Pico / Potencia Promedio
+        
+        Args:
+            signal: Señal transmitida en el dominio del tiempo (array complejo)
+            
+        Returns:
+            dict: PAPR en dB, valores lineales, y potencias
+        """
+        # Calcular potencia instantánea |x[n]|²
+        power_instantaneous = np.abs(signal) ** 2
+        
+        # Potencia pico: max(|x[n]|²)
+        power_peak = np.max(power_instantaneous)
+        
+        # Potencia promedio: E[|x[n]|²]
+        power_average = np.mean(power_instantaneous)
+        
+        # PAPR en forma lineal
+        if power_average > 0:
+            papr_linear = power_peak / power_average
+            papr_db = 10 * np.log10(papr_linear)
+        else:
+            papr_linear = 0
+            papr_db = 0
+        
+        return {
+            'papr_db': papr_db,
+            'papr_linear': papr_linear,
+            'peak_power': power_peak,
+            'avg_power': power_average
+        }
+    
+    def calculate_papr_per_symbol(self, signal):
+        """
+        Calcula el PAPR por cada símbolo OFDM (más preciso)
+        
+        Args:
+            signal: Señal completa transmitida
+            
+        Returns:
+            dict: PAPR por símbolo y estadísticas
+        """
+        # Calcular número de símbolos OFDM
+        samples_per_symbol = self.config.N + self.config.cp_length
+        num_ofdm_symbols = len(signal) // samples_per_symbol
+        
+        papr_per_symbol = []
+        power_avg_per_symbol = []
+        power_peak_per_symbol = []
+        
+        # Calcular PAPR para cada símbolo OFDM
+        for i in range(num_ofdm_symbols):
+            start_idx = i * samples_per_symbol
+            end_idx = start_idx + samples_per_symbol
+            symbol_signal = signal[start_idx:end_idx]
+            
+            # Potencia del símbolo
+            power_inst = np.abs(symbol_signal) ** 2
+            power_peak = np.max(power_inst)
+            power_avg = np.mean(power_inst)
+            
+            # PAPR de este símbolo
+            if power_avg > 0:
+                papr_linear = power_peak / power_avg
+                papr_db = 10 * np.log10(papr_linear)
+            else:
+                papr_linear = 0
+                papr_db = 0
+            
+            papr_per_symbol.append(papr_db)
+            power_avg_per_symbol.append(power_avg)
+            power_peak_per_symbol.append(power_peak)
+        
+        # Estadísticas generales
+        papr_array = np.array(papr_per_symbol)
+        power_peak_array = np.array(power_peak_per_symbol)
+        power_avg_array = np.array(power_avg_per_symbol)
+        
+        return {
+            'papr_per_symbol': papr_array,
+            'power_peak_per_symbol': power_peak_array,
+            'power_avg_per_symbol': power_avg_array,
+            'papr_mean': np.mean(papr_array),
+            'papr_max': np.max(papr_array),
+            'papr_min': np.min(papr_array),
+            'papr_std': np.std(papr_array),
+            'num_symbols': num_ofdm_symbols
+        }
+    
     def transmit(self, bits, snr_db=10.0, return_time=False):
         """
         Transmite bits a través del sistema OFDM
         
         Proceso:
         1. Modular bits a señal OFDM
-        2. Transmitir a través del canal AWGN
+        2. Calcular PAPR
+        3. Transmitir a través del canal AWGN
         
         Args:
             bits: Array de bits a transmitir
@@ -60,9 +179,14 @@ class OFDMSystem:
         
         # Configurar SNR
         self.channel.set_snr(snr_db)
+
+
         
         # Modular bits (puede rellenar con ceros)
         signal_transmitted, symbols_transmitted = self.modulator.modulate_stream(bits)
+        
+        # ✨ CALCULAR PAPR POR SÍMBOLO OFDM (más preciso)
+        papr_per_symbol_info = self.calculate_papr_per_symbol(signal_transmitted)
         
         # Transmitir a través del canal
         signal_received, _ = self.channel.channel.transmit(signal_transmitted)
@@ -111,6 +235,9 @@ class OFDMSystem:
             'transmission_time': transmission_time,
             'evm': 0.0,
             
+            # ✨ PAPR Metrics (POR SÍMBOLO OFDM)
+            'papr_per_symbol': papr_per_symbol_info,
+            
             # Uppercase keys for compatibility with simulator
             'SNR_dB': snr_db,
             'BER': ber,
@@ -119,11 +246,12 @@ class OFDMSystem:
             # Common keys used by both
             'total_symbols': num_tx_symbols,
             'signal_tx': signal_transmitted,
+            'tx_signal': signal_transmitted,  # Alias para GUI
             'signal_rx': signal_received,
             'symbols_tx': symbols_tx_flat[:num_symbols_compare] if num_symbols_compare > 0 else np.array([]),
             'symbols_rx': symbols_detected[:num_symbols_compare] if num_symbols_compare > 0 else np.array([]),
             'transmitted_symbols': symbols_tx_flat,
-            'received_symbols': symbols_detected,
+            'received_symbols': symbols_rx,  # ✨ Símbolos demodulados (con ruido) NO detectados
             'bits_tx': bits,  # Bits transmitidos originales
             'bits_rx': bits_rx,  # Bits recibidos (siempre mismo tamaño que bits_tx)
         }
@@ -171,6 +299,53 @@ class OFDMSystem:
             dict: Resultados de la simulación
         """
         return self.transmit(bits, snr_db)
+    
+    # ============= MÉTODOS PARA CAMBIAR CANAL EN TIEMPO REAL =============
+    
+    def set_channel_type(self, channel_type, itu_profile=None):
+        """
+        Cambia el tipo de canal en tiempo real
+        
+        Args:
+            channel_type: 'awgn' o 'rayleigh_mp'
+            itu_profile: Perfil ITU (solo para rayleigh_mp)
+        """
+        self.channel_type = channel_type
+        
+        if channel_type == 'rayleigh_mp':
+            if itu_profile is None:
+                itu_profile = self.itu_profile
+            else:
+                self.itu_profile = itu_profile
+            
+            fs = self.config.fs if hasattr(self.config, 'fs') else 15.36e6
+            self.channel = ChannelSimulator(
+                channel_type='rayleigh_mp',
+                snr_db=self.channel.channel.snr_db if hasattr(self.channel.channel, 'snr_db') else 10.0,
+                fs=fs,
+                itu_profile=itu_profile
+            )
+        else:
+            # Cambiar a AWGN
+            snr_db = self.channel.channel.snr_db if hasattr(self.channel.channel, 'snr_db') else 10.0
+            self.channel = ChannelSimulator('awgn', snr_db=snr_db)
+    
+    def set_itu_profile(self, itu_profile):
+        """
+        Cambia el perfil ITU si el canal actual es Rayleigh
+        
+        Args:
+            itu_profile: Nombre del perfil ITU-R M.1225
+        """
+        self.itu_profile = itu_profile
+        if self.channel_type == 'rayleigh_mp':
+            self.channel.set_itu_profile(itu_profile)
+    
+    def get_channel_info(self):
+        """Retorna información del canal actual"""
+        return self.channel.get_channel_info()
+    
+    # ====================================================================
     
     def run_ber_sweep(self, num_bits, snr_range, n_iterations, progress_callback=None, bits=None):
         """
@@ -296,6 +471,13 @@ class OFDMSystem:
             self.config.modulation = modulation
             self.config.bits_per_symbol = self._get_bits_per_symbol(modulation)
             
+            # 🔧 IMPORTANTE: Reinicializar modulador y demodulador con la nueva modulación
+            self.modulator = OFDMModulator(self.config)
+            self.demodulator = OFDMDemodulator(self.config)
+            self.symbol_detector = SymbolDetector(
+                self.modulator.get_qam_modulator().get_constellation()
+            )
+            
             # Reportar inicio de modulación
             if progress_callback:
                 progress = (current_step / total_steps) * 100
@@ -325,9 +507,14 @@ class OFDMSystem:
             all_results[modulation] = results
             current_step += total_snrs * n_iterations
         
-        # Restaurar modulación original
+        # 🔧 Restaurar modulación original Y reinicializar modulador/demodulador
         self.config.modulation = original_modulation
         self.config.bits_per_symbol = original_bits_per_symbol
+        self.modulator = OFDMModulator(self.config)
+        self.demodulator = OFDMDemodulator(self.config)
+        self.symbol_detector = SymbolDetector(
+            self.modulator.get_qam_modulator().get_constellation()
+        )
         
         return all_results
     

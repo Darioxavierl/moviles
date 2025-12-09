@@ -136,33 +136,43 @@ class OFDMSimulatorGUI(QMainWindow):
     def init_ui(self):
         """Inicializa la interfaz de usuario"""
         self.setWindowTitle('Simulador OFDM - Especificaciones LTE')
-        self.setGeometry(100, 100, 1400, 900)
+        self.setGeometry(100, 100, 1600, 1000)
         
         # Widget central
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         
-        # Layout principal
+        # Layout principal HORIZONTAL
         main_layout = QHBoxLayout()
         central_widget.setLayout(main_layout)
         
         # Panel izquierdo: controles
         left_panel = self.create_control_panel()
         
+        # Panel central: información de configuración
+        center_panel = self.create_info_panel()
+        
         # Panel derecho: resultados
         right_panel = self.create_results_panel()
         
-        # Agregar paneles con splitter
-        splitter = QSplitter(Qt.Orientation.Horizontal)
-        splitter.addWidget(left_panel)
-        splitter.addWidget(right_panel)
-        splitter.setStretchFactor(0, 1)
-        splitter.setStretchFactor(1, 2)
+        # Agregar paneles con splitters
+        splitter_left_center = QSplitter(Qt.Orientation.Horizontal)
+        splitter_left_center.addWidget(left_panel)
+        splitter_left_center.addWidget(center_panel)
+        splitter_left_center.setStretchFactor(0, 1)
+        splitter_left_center.setStretchFactor(1, 1)
         
-        main_layout.addWidget(splitter)
+        splitter_main = QSplitter(Qt.Orientation.Horizontal)
+        splitter_main.addWidget(splitter_left_center)
+        splitter_main.addWidget(right_panel)
+        splitter_main.setStretchFactor(0, 1)
+        splitter_main.setStretchFactor(1, 2)
+        
+        main_layout.addWidget(splitter_main)
+
     
     def create_control_panel(self):
-        """Crea el panel de controles"""
+        """Crea el panel de controles (izquierda)"""
         panel = QWidget()
         layout = QVBoxLayout()
         panel.setLayout(layout)
@@ -189,17 +199,37 @@ class OFDMSimulatorGUI(QMainWindow):
         layout.addWidget(self.progress_label)
         layout.addWidget(self.progress_bar)
         
-        # Info de configuración
-        self.config_info = QTextEdit()
-        self.config_info.setReadOnly(True)
-        self.config_info.setMaximumHeight(200)
-        layout.addWidget(QLabel("Información de Configuración:"))
-        layout.addWidget(self.config_info)
-        
         layout.addStretch()
         
         return panel
     
+    def create_info_panel(self):
+        """Crea el panel de información de configuración (centro)"""
+        panel = QWidget()
+        layout = QVBoxLayout()
+        panel.setLayout(layout)
+        
+        # Título
+        title_label = QLabel("Información de Configuración")
+        title_label.setStyleSheet("font-weight: bold; font-size: 12px;")
+        layout.addWidget(title_label)
+        
+        # TextEdit para la información
+        self.config_info = QTextEdit()
+        self.config_info.setReadOnly(True)
+        self.config_info.setStyleSheet("""
+            QTextEdit {
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                padding: 5px;
+                font-family: 'Courier New';
+                font-size: 12px;
+            }
+        """)
+        layout.addWidget(self.config_info)
+        
+        return panel
+
     def create_lte_parameters_group(self):
         """Crea grupo de parámetros LTE"""
         group = QGroupBox("Parámetros LTE")
@@ -278,6 +308,51 @@ class OFDMSimulatorGUI(QMainWindow):
         self.iterations_spin.setValue(10)
         layout.addWidget(self.iterations_spin, 4, 1)
         
+        # ============ NUEVOS PARÁMETROS DE CANAL ============
+        
+        # Tipo de canal
+        layout.addWidget(QLabel("Tipo de Canal:"), 5, 0)
+        self.channel_type_combo = QComboBox()
+        self.channel_type_combo.addItems(['AWGN', 'Rayleigh Multitrayecto'])
+        self.channel_type_combo.currentTextChanged.connect(self.on_channel_type_changed)
+        layout.addWidget(self.channel_type_combo, 5, 1)
+        
+        # Perfil ITU (solo para Rayleigh)
+        layout.addWidget(QLabel("Perfil ITU-R M.1225:"), 6, 0)
+        self.itu_profile_combo = QComboBox()
+        self.itu_profile_combo.addItems([
+            'Pedestrian_A',
+            'Pedestrian_B',
+            'Vehicular_A',
+            'Vehicular_B',
+            'Typical_Urban',
+            'Rural_Area'
+        ])
+        self.itu_profile_combo.setCurrentText('Vehicular_A')
+        self.itu_profile_combo.currentTextChanged.connect(self.on_itu_profile_changed)
+        self.itu_profile_combo.setEnabled(False)  # Inicialmente deshabilitado
+        layout.addWidget(self.itu_profile_combo, 6, 1)
+        
+        # Frecuencia portadora (GHz)
+        layout.addWidget(QLabel("Frecuencia Portadora (GHz):"), 7, 0)
+        self.frequency_spin = QDoubleSpinBox()
+        self.frequency_spin.setRange(0.5, 10.0)
+        self.frequency_spin.setValue(2.0)
+        self.frequency_spin.setSingleStep(0.1)
+        self.frequency_spin.setEnabled(False)
+        layout.addWidget(self.frequency_spin, 7, 1)
+        
+        # Velocidad (km/h)
+        layout.addWidget(QLabel("Velocidad (km/h):"), 8, 0)
+        self.velocity_spin = QDoubleSpinBox()
+        self.velocity_spin.setRange(0, 200)
+        self.velocity_spin.setValue(50)
+        self.velocity_spin.setSingleStep(5)
+        self.velocity_spin.setEnabled(False)
+        layout.addWidget(self.velocity_spin, 8, 1)
+        
+        # ====================================================
+        
         group.setLayout(layout)
         return group
     
@@ -353,19 +428,116 @@ class OFDMSimulatorGUI(QMainWindow):
             modulation = self.modulation_combo.currentText()
             cp_type = self.cp_combo.currentText()
             
+            # Obtener tipo de canal e ITU profile
+            channel_type = 'awgn' if self.channel_type_combo.currentText() == 'AWGN' else 'rayleigh_mp'
+            itu_profile = self.itu_profile_combo.currentText()
+            frequency_ghz = self.frequency_spin.value() if channel_type == 'rayleigh_mp' else 2.0
+            velocity_kmh = self.velocity_spin.value() if channel_type == 'rayleigh_mp' else 0
+            
             config = LTEConfig(bandwidth, delta_f, modulation, cp_type)
-            self.ofdm_system = OFDMSystem(config)
+            
+            # Pasar parámetros del canal Rayleigh
+            if channel_type == 'rayleigh_mp':
+                self.ofdm_system = OFDMSystem(
+                    config, 
+                    channel_type=channel_type, 
+                    itu_profile=itu_profile,
+                    frequency_ghz=frequency_ghz,
+                    velocity_kmh=velocity_kmh
+                )
+            else:
+                self.ofdm_system = OFDMSystem(config, channel_type=channel_type, itu_profile=itu_profile)
             
             # Mostrar info
             info = config.get_info()
-            info_text = "Configuración Actual:\n" + "-"*40 + "\n"
+            info_text = "Configuración LTE:\n" + "-"*40 + "\n"
             for key, value in info.items():
                 info_text += f"{key}: {value}\n"
+            
+            # Agregar info del canal
+            channel_info = self.ofdm_system.get_channel_info()
+            info_text += "\n" + "="*40 + "\n"
+            info_text += "Información del Canal:\n"
+            for key, value in channel_info.items():
+                if key == 'delays_us':
+                    info_text += f"  Retardos (µs): {[f'{d:.2f}' for d in value]}\n"
+                elif key == 'gains_dB':
+                    info_text += f"  Ganancias (dB): {[f'{g:.1f}' for g in value]}\n"
+                elif key == 'SNR_dB':
+                    info_text += f"  SNR: {value:.2f} dB\n"
+                else:
+                    info_text += f"  {key}: {value}\n"
+            
+            # Agregar parámetros Rayleigh si aplica
+            if channel_type == 'rayleigh_mp':
+                info_text += "\n" + "="*40 + "\n"
+                info_text += "Parámetros Rayleigh:\n"
+                info_text += f"  Frecuencia: {frequency_ghz:.2f} GHz\n"
+                info_text += f"  Velocidad: {velocity_kmh:.1f} km/h\n"
             
             self.config_info.setText(info_text)
             
         except Exception as e:
             QMessageBox.warning(self, "Error", f"Error al actualizar configuración: {str(e)}")
+
+    
+    def on_channel_type_changed(self):
+        """Maneja el cambio de tipo de canal"""
+        is_rayleigh = self.channel_type_combo.currentText() == 'Rayleigh Multitrayecto'
+        self.itu_profile_combo.setEnabled(is_rayleigh)
+        self.frequency_spin.setEnabled(is_rayleigh)
+        self.velocity_spin.setEnabled(is_rayleigh)
+        
+        if is_rayleigh:
+            self.on_itu_profile_changed()
+        else:
+            self.update_config()
+    
+    def on_itu_profile_changed(self):
+        """Maneja el cambio de perfil ITU"""
+        if not self.channel_type_combo.currentText() == 'Rayleigh Multitrayecto':
+            return
+        
+        try:
+            from core.itu_r_m1225 import ITU_R_M1225
+            import os
+            
+            itu_profile = self.itu_profile_combo.currentText()
+            
+            # Cargar info del perfil
+            json_path = os.path.join(os.path.dirname(__file__), '..', 'core', 'itu_r_m1225_channels.json')
+            itu = ITU_R_M1225(json_path)
+            profile_info = itu.get_info(itu_profile)
+            
+            # Extraer rangos de frecuencia
+            freq_field = profile_info['frequency_GHz']
+            if '-' in freq_field:
+                freq_min, freq_max = map(float, freq_field.split('-'))
+            else:
+                freq_min = freq_max = float(freq_field)
+            
+            # Actualizar controles de frecuencia
+            self.frequency_spin.setRange(freq_min, freq_max)
+            self.frequency_spin.setValue((freq_min + freq_max) / 2)
+            
+            # Extraer rangos de velocidad
+            vel_field = profile_info['velocity_kmh']
+            if '-' in vel_field:
+                vel_min, vel_max = map(float, vel_field.split('-'))
+            else:
+                vel_min = vel_max = float(vel_field)
+            
+            # Actualizar controles de velocidad
+            self.velocity_spin.setRange(vel_min, vel_max)
+            self.velocity_spin.setValue((vel_min + vel_max) / 2)
+            
+            # Actualizar sistema OFDM
+            self.update_config()
+            
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Error al cambiar perfil ITU: {str(e)}")
+
+        
     
     def load_image(self):
         """Carga una imagen para transmitir"""
@@ -457,19 +629,32 @@ class OFDMSimulatorGUI(QMainWindow):
         metrics_text += f"Bits transmitidos: {results['n_bits']}\n"
         metrics_text += f"BER: {results['ber']:.6e}\n"
         metrics_text += f"Errores: {results['errors']}\n"
-        metrics_text += f"EVM: {results['evm']:.2f}%\n"
+        #metrics_text += f"EVM: {results['evm']:.2f}%\n"
+        
+        # Agregar PAPR POR SÍMBOLO
+        if 'papr_per_symbol' in results:
+            papr_info = results['papr_per_symbol']
+            metrics_text += f"\n{'='*50}\n"
+            metrics_text += f"PAPR (Por Símbolo OFDM):\n"
+            metrics_text += f"  Promedio: {papr_info['papr_mean']:.2f} dB\n"
+            metrics_text += f"  Máximo: {papr_info['papr_max']:.2f} dB \n"
+            metrics_text += f"  Mínimo: {papr_info['papr_min']:.2f} dB\n"
+            metrics_text += f"  Desv. Est.: {papr_info['papr_std']:.2f} dB\n"
+            metrics_text += f"  Símbolos: {papr_info['num_symbols']}\n"
+            
+            # Imprimir en consola también
+            print(f"\n{'='*60}")
+            print(f"PAPR MÁXIMO DE LA TRANSMISIÓN: {papr_info['papr_max']:.3f} dB")
+            print(f"{'='*60}")
         
         if 'transmission_time' in results:
-            metrics_text += f"Tiempo de transmisión: {results['transmission_time']*1000:.3f} ms\n"
+            metrics_text += f"\nTiempo de transmisión: {results['transmission_time']*1000:.3f} ms\n"
         
         self.metrics_tab.setText(metrics_text)
         
-        # Graficar constelación
+        # Graficar constelación y PAPR
         self.clear_plots()
-        self.plot_constellation_comparison(
-            results['transmitted_symbols'],
-            results['received_symbols']
-        )
+        self.plot_constellation_and_papr(results)
         
         # Mostrar imagen si aplica
         if 'reconstructed_image' in results:
@@ -530,6 +715,111 @@ class OFDMSimulatorGUI(QMainWindow):
         ax2.set_xlabel('I')
         ax2.set_ylabel('Q')
         ax2.set_aspect('equal')
+        
+        fig.tight_layout()
+        
+        canvas = FigureCanvas(fig)
+        self.plots_layout.addWidget(canvas)
+    
+    def plot_constellation_and_papr(self, results):
+        """Grafica constelación, envolvente de señal y serie temporal de PAPR"""
+        from matplotlib.gridspec import GridSpec
+        
+        fig = Figure(figsize=(16, 10))
+        gs = GridSpec(3, 2, figure=fig, hspace=0.35, wspace=0.3)
+        
+        # Subplot 1: Constelación TX (arriba izquierda)
+        ax1 = fig.add_subplot(gs[0, 0])
+        tx_symbols = results['transmitted_symbols'][:1000]
+        ax1.scatter(tx_symbols.real, tx_symbols.imag, alpha=0.5, s=8, color='blue')
+        ax1.grid(True, alpha=0.3)
+        ax1.axhline(y=0, color='k', linewidth=0.5)
+        ax1.axvline(x=0, color='k', linewidth=0.5)
+        ax1.set_title('Constelación Transmitida (TX)', fontsize=11, fontweight='bold')
+        ax1.set_xlabel('I')
+        ax1.set_ylabel('Q')
+        ax1.set_aspect('equal')
+        
+        # Subplot 2: Constelación RX (arriba derecha)
+        ax2 = fig.add_subplot(gs[0, 1])
+        rx_symbols = results['received_symbols'][:1000]
+        ax2.scatter(rx_symbols.real, rx_symbols.imag, alpha=0.5, s=8, color='red')
+        ax2.grid(True, alpha=0.3)
+        ax2.axhline(y=0, color='k', linewidth=0.5)
+        ax2.axvline(x=0, color='k', linewidth=0.5)
+        ax2.set_title('Constelación Recibida (RX)', fontsize=11, fontweight='bold')
+        ax2.set_xlabel('I')
+        ax2.set_ylabel('Q')
+        ax2.set_aspect('equal')
+        
+        # Subplot 3: PAPR por símbolo (Medio, ancho completo)
+        ax3 = fig.add_subplot(gs[1, :])
+        
+        
+        if 'papr_per_symbol' in results:
+            papr_info = results['papr_per_symbol']
+            papr_per_symbol = papr_info['papr_per_symbol']
+            
+            symbol_indices = np.arange(len(papr_per_symbol))
+            max_symbols_plot = min(100, len(papr_per_symbol))
+            symbol_indices_plot = symbol_indices[:max_symbols_plot]
+            papr_plot = papr_per_symbol[:max_symbols_plot]
+            
+            # Graficar PAPR
+            ax3.plot(symbol_indices_plot, papr_plot, 'b-', linewidth=2, marker='o', markersize=5)
+            ax3.fill_between(symbol_indices_plot, papr_plot, alpha=0.3)
+            
+            # Líneas verticales para límites de símbolos
+            for idx in symbol_indices_plot[::5]:  # Cada 5 símbolos
+                ax3.axvline(x=idx, color='gray', linestyle=':', alpha=0.4, linewidth=0.8)
+            
+            # Marcar máximos locales
+            max_idx = np.argmax(papr_plot)
+            max_value = papr_plot[max_idx]
+            ax3.scatter(symbol_indices_plot[max_idx], max_value, 
+                       color='red', s=150, marker='*', zorder=5, edgecolors='darkred', linewidths=2)
+            
+            # Anotación mejorada con máximo global
+            max_global = papr_info['papr_max']
+            annotation_text = f'Max Global: {max_global:.2f} dB'
+            ax3.annotate(annotation_text, 
+                        xy=(symbol_indices_plot[max_idx], max_value),
+                        xytext=(10, -50), textcoords='offset points',
+                        bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.7),
+                        arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0', color='red'),
+                        fontsize=9, fontweight='bold')
+            
+            # Línea de promedio
+            mean_papr = papr_info['papr_mean']
+            ax3.axhline(y=mean_papr, color='green', linestyle='--', linewidth=2, label=f'Promedio: {mean_papr:.2f} dB')
+            ax3.set_ylim((mean_papr/2, max_value + 3))
+            ax3.set_xlabel('Índice de Símbolo OFDM', fontsize=11, fontweight='bold')
+            ax3.set_ylabel('PAPR (dB)', fontsize=11, fontweight='bold')
+            ax3.set_title('PAPR por Símbolo', fontsize=11, fontweight='bold')
+            ax3.grid(True, alpha=0.3)
+            ax3.legend(fontsize=9)
+        
+        # Subplot 5: Estadísticas y información (centro inferior)
+        ax5 = fig.add_subplot(gs[2, :])
+        ax5.axis('off')
+        
+        if 'papr_per_symbol' in results:
+            papr_info = results['papr_per_symbol']
+            
+            # Crear tabla de estadísticas
+            stats_text = "ESTADÍSTICAS PAPR\n" + "="*40 + "\n\n"
+            stats_text += f"Total de Símbolos OFDM: {papr_info['num_symbols']}\n"
+            stats_text += f"Símbolos Graficados: {min(100, papr_info['num_symbols'])}\n\n"
+            stats_text += f"PAPR Promedio: {papr_info['papr_mean']:.3f} dB\n"
+            stats_text += f"PAPR Máximo: {papr_info['papr_max']:.3f} dB \n"
+            #stats_text += f"PAPR Mínimo: {papr_info['papr_min']:.3f} dB\n"
+            stats_text += f"Desv. Estándar: {papr_info['papr_std']:.3f} dB\n\n"
+            stats_text += f"Rango PAPR: {papr_info['papr_max'] - papr_info['papr_min']:.3f} dB\n"
+            #stats_text += f"Variación (Std/Media): {papr_info['papr_std']/papr_info['papr_mean']*100:.1f}%\n"
+            
+            ax5.text(0.05, 0.95, stats_text, transform=ax5.transAxes,
+                    fontsize=10, verticalalignment='top', family='monospace',
+                    bbox=dict(boxstyle='round', facecolor='lightyellow', alpha=0.8, pad=1))
         
         fig.tight_layout()
         

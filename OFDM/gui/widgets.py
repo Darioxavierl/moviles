@@ -154,7 +154,7 @@ class MetricsPanel(QWidget):
             ('SNR', 'dB'),
             ('BER', ''),
             ('Errores', 'bits'),
-            ('EVM', '%'),
+            #('EVM', '%'),
             ('Bits Transmitidos', ''),
             ('Tiempo TX', 'ms')
         ]
