@@ -1,8 +1,10 @@
 """
 Sistema OFDM Completo - Integra modulador, canal y demodulador
+Versión 2.0 con soporte LTE (mode='lte') e integración backward compatible
 """
 import numpy as np
 import time
+import os
 from core.modulator import OFDMModulator, QAMModulator
 from core.demodulator import OFDMDemodulator, SymbolDetector
 from core.channel import ChannelSimulator
@@ -12,8 +14,8 @@ from config.lte_params import LTEConfig
 class OFDMSystem:
     """Sistema OFDM completo que integra todos los componentes"""
     
-    def __init__(self, config, channel_type='awgn', itu_profile='Vehicular_A', 
-                 frequency_ghz=None, velocity_kmh=None):
+    def __init__(self, config=None, channel_type='awgn', itu_profile=None, 
+                 frequency_ghz=2.0, velocity_kmh=0, mode='lte'):
         """
         Inicializa el sistema OFDM
         
@@ -23,14 +25,19 @@ class OFDMSystem:
             itu_profile: Perfil ITU para Rayleigh (si aplica)
             frequency_ghz: Frecuencia portadora en GHz (para Rayleigh)
             velocity_kmh: Velocidad en km/h (para Rayleigh)
+            mode: 'lte' (nuevo mapeo LTE) o 'simple' (modo clásico)
         """
+        if config is None:
+            config = LTEConfig()
+        
         self.config = config
-        self.modulator = OFDMModulator(config)
+        self.modulator = OFDMModulator(config, mode=mode)
         self.demodulator = OFDMDemodulator(config)
         self.channel_type = channel_type
         self.itu_profile = itu_profile
         self.frequency_ghz = frequency_ghz
         self.velocity_kmh = velocity_kmh
+        self.mode = mode
         
         # Calcular Fs desde config
         fs = config.fs if hasattr(config, 'fs') else 15.36e6  # LTE default
@@ -160,9 +167,9 @@ class OFDMSystem:
         Transmite bits a través del sistema OFDM
         
         Proceso:
-        1. Modular bits a señal OFDM
+        1. Modular bits a señal OFDM (con soporte LTE si mode='lte')
         2. Calcular PAPR
-        3. Transmitir a través del canal AWGN
+        3. Transmitir a través del canal
         
         Args:
             bits: Array de bits a transmitir
@@ -179,11 +186,10 @@ class OFDMSystem:
         
         # Configurar SNR
         self.channel.set_snr(snr_db)
-
-
         
         # Modular bits (puede rellenar con ceros)
-        signal_transmitted, symbols_transmitted = self.modulator.modulate_stream(bits)
+        # Nota: modulate_stream retorna (signal, symbols_list, mapping_infos)
+        signal_transmitted, symbols_transmitted, mapping_infos = self.modulator.modulate_stream(bits)
         
         # ✨ CALCULAR PAPR POR SÍMBOLO OFDM (más preciso)
         papr_per_symbol_info = self.calculate_papr_per_symbol(signal_transmitted)
@@ -472,7 +478,7 @@ class OFDMSystem:
             self.config.bits_per_symbol = self._get_bits_per_symbol(modulation)
             
             # 🔧 IMPORTANTE: Reinicializar modulador y demodulador con la nueva modulación
-            self.modulator = OFDMModulator(self.config)
+            self.modulator = OFDMModulator(self.config, mode=self.mode)
             self.demodulator = OFDMDemodulator(self.config)
             self.symbol_detector = SymbolDetector(
                 self.modulator.get_qam_modulator().get_constellation()
@@ -510,7 +516,7 @@ class OFDMSystem:
         # 🔧 Restaurar modulación original Y reinicializar modulador/demodulador
         self.config.modulation = original_modulation
         self.config.bits_per_symbol = original_bits_per_symbol
-        self.modulator = OFDMModulator(self.config)
+        self.modulator = OFDMModulator(self.config, mode=self.mode)
         self.demodulator = OFDMDemodulator(self.config)
         self.symbol_detector = SymbolDetector(
             self.modulator.get_qam_modulator().get_constellation()

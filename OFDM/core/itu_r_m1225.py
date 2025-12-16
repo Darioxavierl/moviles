@@ -3,9 +3,36 @@ import os
 import numpy as np
 
 class ITU_R_M1225:
-    def __init__(self, json_path="itu_r_m1225_channels.json"):
+    def __init__(self, json_path=None):
+        """
+        Inicializa el módulo ITU-R M.1225
+        
+        Args:
+            json_path: Ruta al archivo JSON (si None, busca en locations por defecto)
+        """
+        if json_path is None:
+            # Intentar encontrar el archivo en locations estándar
+            possible_paths = [
+                "core/itu_r_m1225_channels.json",                          # Desde raíz
+                os.path.join(os.path.dirname(__file__), "itu_r_m1225_channels.json"),  # Mismo directorio
+                os.path.join(os.getcwd(), "core", "itu_r_m1225_channels.json"),  # CWD
+            ]
+            
+            json_path = None
+            for path in possible_paths:
+                if os.path.exists(path):
+                    json_path = path
+                    break
+            
+            if json_path is None:
+                raise FileNotFoundError(
+                    f"No se encontró el archivo itu_r_m1225_channels.json.\n"
+                    f"Se buscó en:\n" + "\n".join(f"  - {p}" for p in possible_paths)
+                )
+        
         if not os.path.exists(json_path):
             raise FileNotFoundError(f"No se encontró el archivo: {json_path}")
+        
         with open(json_path, "r", encoding="utf-8") as f:
             self.channels = json.load(f)
 

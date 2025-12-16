@@ -1,8 +1,13 @@
 """
 Modulador OFDM - Convierte símbolos QAM/QPSK a señal OFDM
+
+Versiones:
+- v1.0: Mapeo simple (secuencial)
+- v2.0: Mapeo LTE con DC, guardias y pilotos (ResourceMapper)
 """
 import numpy as np
 from config.lte_params import LTEConfig
+from core.resource_mapper import ResourceMapper
 
 
 class QAMModulator:
@@ -110,55 +115,105 @@ class QAMModulator:
 
 
 class OFDMModulator:
-    """Modulador OFDM que implementa IFFT y prefijo cíclico"""
+    """Modulador OFDM que implementa IFFT y prefijo cíclico
     
-    def __init__(self, config):
+    Soporta dos modos:
+    - 'simple': Mapeo secuencial tradicional (v1.0)
+    - 'lte': Mapeo con estándar LTE (DC, guardias, pilotos) (v2.0)
+    """
+    
+    def __init__(self, config, mode='lte'):
         """
         Inicializa el modulador OFDM
         
         Args:
             config: Objeto LTEConfig con parámetros de configuración
+            mode: 'simple' o 'lte' (default: 'lte' para mejor rendimiento)
         """
         self.config = config
+        self.mode = mode
         self.qam_modulator = QAMModulator(config.modulation)
+        
+        # Inicializar ResourceMapper si modo LTE
+        if self.mode == 'lte':
+            self.resource_mapper = ResourceMapper(config)
+        else:
+            self.resource_mapper = None
     
     def modulate(self, bits):
         """
         Modula bits a señal OFDM
         
-        Proceso:
+        Proceso (modo simple):
         1. Convertir bits a símbolos QAM
-        2. Convertir serie a paralelo (mapear a subportadoras)
+        2. Mapeo secuencial a subportadoras
         3. Aplicar IFFT
         4. Agregar prefijo cíclico
-        5. Convertir a serie
+        
+        Proceso (modo LTE):
+        1. Convertir bits a símbolos QAM
+        2. Mapeo LTE: datos + pilotos + DC nulo + guardias nulas
+        3. Aplicar IFFT
+        4. Agregar prefijo cíclico
         
         Args:
             bits: Array de bits
             
         Returns:
-            tuple: (signal_time_domain, symbols)
+            tuple: (signal_time_domain, symbols, mapping_info)
+                   donde mapping_info es None en modo simple
         """
         # Paso 1: Convertir bits a símbolos QAM
         qam_symbols = self.qam_modulator.bits_to_symbols(bits)
         
+        if self.mode == 'lte':
+            # Modo LTE con mapeo de recursos
+            return self._modulate_lte(qam_symbols)
+        else:
+            # Modo simple (original)
+            return self._modulate_simple(qam_symbols)
+    
+    def _modulate_simple(self, qam_symbols):
+        """
+        Modulación simple: mapeo secuencial tradicional
+        
+        Returns: (signal, symbols, None)
+        """
         # Asegurarse de que tenemos el número correcto de símbolos
-        # Los símbolos restantes se rellenan con ceros
         symbols_parallel = np.zeros(self.config.N, dtype=complex)
         num_data_symbols = min(len(qam_symbols), self.config.Nc)
         symbols_parallel[:num_data_symbols] = qam_symbols[:num_data_symbols]
         
-        # Paso 2: Aplicar IFFT (serie -> paralelo ya hecho)
+        # Aplicar IFFT
         time_domain = np.fft.ifft(symbols_parallel) * np.sqrt(self.config.N)
         
-        # Paso 3: Agregar prefijo cíclico
+        # Agregar prefijo cíclico
         ofdm_symbol_with_cp = np.concatenate([
-            time_domain[-self.config.cp_length:],  # CP al inicio
+            time_domain[-self.config.cp_length:],
             time_domain
         ])
         
-        # Paso 4: Convertir a serie (ya está en serie)
-        return ofdm_symbol_with_cp, qam_symbols[:num_data_symbols]
+        return ofdm_symbol_with_cp, qam_symbols[:num_data_symbols], None
+    
+    def _modulate_lte(self, qam_symbols):
+        """
+        Modulación LTE: mapeo con estándar LTE (DC, guardias, pilotos)
+        
+        Returns: (signal, symbols, mapping_info)
+        """
+        # Mapear símbolos usando ResourceMapper
+        grid_mapped, mapping_info = self.resource_mapper.map_symbols(qam_symbols)
+        
+        # Aplicar IFFT
+        time_domain = np.fft.ifft(grid_mapped) * np.sqrt(self.config.N)
+        
+        # Agregar prefijo cíclico
+        ofdm_symbol_with_cp = np.concatenate([
+            time_domain[-self.config.cp_length:],
+            time_domain
+        ])
+        
+        return ofdm_symbol_with_cp, qam_symbols, mapping_info
     
     def modulate_stream(self, bits, num_ofdm_symbols=None):
         """
@@ -169,7 +224,8 @@ class OFDMModulator:
             num_ofdm_symbols: Número de símbolos OFDM a generar (opcional)
             
         Returns:
-            tuple: (signal_concatenated, all_symbols)
+            tuple: (signal_concatenated, all_symbols, mapping_infos)
+                   donde mapping_infos es None en modo simple
         """
         bits_per_ofdm = self.config.Nc * self.config.bits_per_symbol
         
@@ -185,20 +241,24 @@ class OFDMModulator:
         # Modular cada símbolo OFDM
         signal_stream = []
         all_symbols = []
+        mapping_infos = [] if self.mode == 'lte' else None
         
         for i in range(num_ofdm_symbols):
             start_idx = i * bits_per_ofdm
             end_idx = start_idx + bits_per_ofdm
             bits_chunk = bits[start_idx:end_idx]
             
-            ofdm_symbol, symbols = self.modulate(bits_chunk)
-            signal_stream.append(ofdm_symbol)
+            ofdm_signal, symbols, mapping_info = self.modulate(bits_chunk)
+            signal_stream.append(ofdm_signal)
             all_symbols.append(symbols)
+            
+            if self.mode == 'lte':
+                mapping_infos.append(mapping_info)
         
         # Concatenar todos los símbolos OFDM
         signal_concatenated = np.concatenate(signal_stream)
         
-        return signal_concatenated, all_symbols
+        return signal_concatenated, all_symbols, mapping_infos if self.mode == 'lte' else None
     
     def get_qam_modulator(self):
         """Retorna el modulador QAM para acceso directo"""
