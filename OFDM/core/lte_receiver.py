@@ -12,7 +12,7 @@ Compatible con modo LTE del transmisor
 """
 
 import numpy as np
-from typing import Dict, Tuple, Optional
+from typing import Dict, Tuple, Optional, List
 from core.resource_mapper import LTEResourceGrid, PilotPattern
 from core.modulator import QAMModulator
 
@@ -35,7 +35,7 @@ class LTEChannelEstimator:
         self.config = config
         self.cell_id = cell_id
         self.resource_grid = LTEResourceGrid(config.N, config.Nc)
-        self.pilot_pattern = PilotPattern(config.N, config.Nc, config.Nc, cell_id)
+        self.pilot_pattern = PilotPattern(cell_id)
     
     def estimate_channel(self, received_signal: np.ndarray, 
                         tx_signal: Optional[np.ndarray] = None) -> Dict:
@@ -63,7 +63,8 @@ class LTEChannelEstimator:
         
         # Generar patrón de pilotos conocidos
         pilot_indices = self.resource_grid.get_pilot_indices()
-        known_pilots = self.pilot_pattern.generate_pilots()
+        num_pilots = len(pilot_indices)
+        known_pilots = self.pilot_pattern.generate_pilots(num_pilots)
         
         # Extraer pilotos recibidos
         received_pilots = received_signal[pilot_indices]
@@ -206,7 +207,7 @@ class LTEReceiver:
         
         # Componentes
         self.resource_grid = LTEResourceGrid(config.N, config.Nc)
-        self.pilot_pattern = PilotPattern(config.N, config.Nc, config.Nc, cell_id)
+        self.pilot_pattern = PilotPattern(cell_id)
         self.channel_estimator = LTEChannelEstimator(config, cell_id)
         self.equalizer = LTEEqualizerZF(config)
         self.qam_demodulator = QAMModulator(config.modulation)
@@ -214,13 +215,16 @@ class LTEReceiver:
         # Historial de estimaciones
         self.channel_estimates = []
         self.equalization_info = []
+        
+        # Parámetro para estimación periódica
+        self.slot_size = 14  # Número de OFDM símbolos por slot en LTE
     
     def receive_and_decode(self, received_ofdm_signal: np.ndarray) -> Dict:
         """
         Recibe y decodifica una señal OFDM con mapeo LTE
         
         Proceso completo:
-        1. FFT (demodulación OFDM)
+        1. FFT (demodulación OFDM de múltiples símbolos)
         2. Estimación de canal usando pilotos
         3. Ecualización (si está habilitada)
         4. Extracción de datos (ignorar DC, guardias, pilotos)
@@ -239,22 +243,64 @@ class LTEReceiver:
                 - 'bits': Bits decodificados
                 - 'symbols_detected': Símbolos detectados
         """
-        # Paso 1: Demodulación OFDM (FFT)
-        received_symbols = self._demodulate_ofdm(received_ofdm_signal)
+        # Paso 1: Demodulación OFDM (FFT) para todos los símbolos
+        all_received_symbols = self._demodulate_ofdm_stream(received_ofdm_signal)
         
-        # Paso 2: Estimación de canal
-        channel_info = self.channel_estimator.estimate_channel(received_symbols)
-        channel_estimate = channel_info['channel_estimate']
+        # Concatenar todos los símbolos en un array
+        received_symbols = np.concatenate(all_received_symbols) if all_received_symbols else np.array([])
         
-        # Paso 3: Ecualización (opcional)
+        if len(received_symbols) == 0:
+            # Retornar arrays vacíos si no hay símbolos
+            return {
+                'symbols_received': received_symbols,
+                'symbols_equalized': received_symbols,
+                'symbols_data_only': received_symbols,
+                'symbols_detected': received_symbols,
+                'bits': np.array([]),
+                'channel_estimate': received_symbols,
+                'channel_snr_db': 0,
+                'pilot_snr_db': 0,
+                'num_data_symbols': 0,
+                'num_pilot_symbols': 0,
+                'equalization_enabled': self.enable_equalization
+            }
+        
+        # Paso 2: Estimación periódica de canal (CADA SLOT como LTE)
+        num_ofdm_symbols = len(all_received_symbols)
+        
+        # Realizar estimación periódica y obtener interpolación temporal
+        channel_estimates_per_symbol, channel_snr_db = self._estimate_channel_periodic(
+            all_received_symbols
+        )
+        
+        # Para simplificar ecualizacion, usar el primer canal estimado
+        # (se podría mejorar usando interpolación por símbolo)
+        channel_estimate = channel_estimates_per_symbol[0]
+        
+        # Paso 3: Ecualización (opcional, usando estimaciones periódicas)
         if self.enable_equalization:
-            symbols_equalized = self.equalizer.equalize(received_symbols, channel_estimate)
+            symbols_equalized = self._equalize_with_periodic_estimates(
+                all_received_symbols,
+                channel_estimates_per_symbol
+            )
         else:
             symbols_equalized = received_symbols
         
         # Paso 4: Extracción de datos (solo posiciones de datos)
         data_indices = self.resource_grid.get_data_indices()
-        symbols_data = symbols_equalized[data_indices]
+        
+        # Para múltiples símbolos OFDM, repetimos el patrón de índices
+        num_ofdm_symbols = len(all_received_symbols)
+        all_data_indices = []
+        for sym_idx in range(num_ofdm_symbols):
+            offset = sym_idx * self.config.N
+            all_data_indices.extend(data_indices + offset)
+        
+        all_data_indices = np.array(all_data_indices)
+        
+        # Verificar que los índices están dentro del rango
+        valid_indices = all_data_indices[all_data_indices < len(symbols_equalized)]
+        symbols_data = symbols_equalized[valid_indices]
         
         # Paso 5: Detección y decodificación
         symbols_detected = self._detect_symbols(symbols_data)
@@ -263,7 +309,7 @@ class LTEReceiver:
         # Guardar en historial
         self.channel_estimates.append(channel_estimate)
         self.equalization_info.append({
-            'channel_snr_db': channel_info['pilot_snr_db'],
+            'channel_snr_db': channel_snr_db,
             'num_data_symbols': len(symbols_data)
         })
         
@@ -274,12 +320,145 @@ class LTEReceiver:
             'symbols_detected': symbols_detected,
             'bits': bits,
             'channel_estimate': channel_estimate,
-            'channel_snr_db': channel_info['pilot_snr_db'],
-            'pilot_snr_db': channel_info['pilot_snr_db'],
+            'channel_snr_db': channel_snr_db,
+            'pilot_snr_db': channel_snr_db,
             'num_data_symbols': len(symbols_data),
-            'num_pilot_symbols': len(self.resource_grid.get_pilot_indices()),
+            'num_pilot_symbols': len(self.resource_grid.get_pilot_indices()) * num_ofdm_symbols,
             'equalization_enabled': self.enable_equalization
         }
+    
+    def _estimate_channel_periodic(self, all_received_symbols: List[np.ndarray]) -> Tuple[List[np.ndarray], float]:
+        """
+        Realiza estimación periódica de canal cada slot (14 símbolos OFDM) como LTE real.
+        
+        En LTE, el canal se estima en símbolos con pilotos (cada 2 símbolos) e interpola
+        en tiempo para los símbolos sin pilotos. Aquí simplificamos a cada slot (14 símbolos).
+        
+        Args:
+            all_received_symbols: Lista de símbolos OFDM recibidos en dominio frecuencia
+            
+        Returns:
+            Tuple de:
+            - channel_estimates_per_symbol: Lista con estimación de canal para cada símbolo
+            - channel_snr_db: SNR estimado de los pilotos
+        """
+        num_symbols = len(all_received_symbols)
+        channel_estimates_per_symbol = []
+        pilot_snr_list = []
+        
+        # Estimar canal en cada slot (14 símbolos)
+        for slot_start in range(0, num_symbols, self.slot_size):
+            slot_end = min(slot_start + self.slot_size, num_symbols)
+            slot_length = slot_end - slot_start
+            
+            # Estimar canal en el primer símbolo del slot que tenga pilotos
+            # (Generalmente es el símbolo 0 del slot)
+            symbol_idx = slot_start
+            
+            if symbol_idx < num_symbols:
+                ch_info = self.channel_estimator.estimate_channel(
+                    all_received_symbols[symbol_idx]
+                )
+                slot_channel_estimate = ch_info['channel_estimate']
+                pilot_snr_list.append(ch_info['pilot_snr_db'])
+                
+                # Interpolar el canal para todos los símbolos del slot
+                for i in range(slot_length):
+                    sym_idx = slot_start + i
+                    
+                    if i == 0:
+                        # Primer símbolo del slot: usar estimación directa
+                        channel_estimates_per_symbol.append(slot_channel_estimate)
+                    else:
+                        # Símbolos posteriores en el slot: interpolar en tiempo
+                        # Para simplificar, usar el mismo canal estimado
+                        # (mejora: interpolar entre estimaciones de slots consecutivos)
+                        channel_estimates_per_symbol.append(slot_channel_estimate)
+        
+        # SNR promedio de todos los slots
+        channel_snr_db = np.mean(pilot_snr_list) if pilot_snr_list else 0.0
+        
+        return channel_estimates_per_symbol, channel_snr_db
+    
+    def _equalize_with_periodic_estimates(self, all_received_symbols: List[np.ndarray],
+                                          channel_estimates_per_symbol: List[np.ndarray]) -> np.ndarray:
+        """
+        Aplica ecualización usando estimaciones periódicas de canal por símbolo.
+        
+        Cada símbolo OFDM se ecualiza con su estimación de canal correspondiente.
+        
+        Args:
+            all_received_symbols: Lista de símbolos OFDM recibidos
+            channel_estimates_per_symbol: Lista de estimaciones de canal por símbolo
+            
+        Returns:
+            Array con símbolos ecualizados (concatenados)
+        """
+        symbols_equalized_list = []
+        
+        for sym_idx, received_sym in enumerate(all_received_symbols):
+            # Obtener estimación de canal para este símbolo
+            if sym_idx < len(channel_estimates_per_symbol):
+                channel_est = channel_estimates_per_symbol[sym_idx]
+            else:
+                # Fallback: usar última estimación disponible
+                channel_est = channel_estimates_per_symbol[-1]
+            
+            # Aplicar ecualización ZF a este símbolo
+            sym_equalized = self.equalizer.equalize(received_sym, channel_est)
+            symbols_equalized_list.append(sym_equalized)
+        
+        # Concatenar todos los símbolos ecualizados
+        return np.concatenate(symbols_equalized_list) if symbols_equalized_list else np.array([])
+    
+    def _demodulate_ofdm_stream(self, received_signal: np.ndarray) -> List[np.ndarray]:
+        """
+        Demodula múltiples símbolos OFDM del flujo de recepción.
+        
+        Procesa la señal recibida en chunks de (N + CP) muestras, donde:
+        - N = número de subportadoras (128)
+        - CP = prefijo cíclico (32)
+        
+        Args:
+            received_signal: Señal recibida completa (dominio tiempo)
+            
+        Returns:
+            Lista de arrays con los símbolos OFDM en dominio frecuencia
+            Cada elemento tiene shape (N,) = (128,)
+        """
+        symbol_length = self.config.N + self.config.cp_length  # 128 + 32 = 160
+        num_symbols = len(received_signal) // symbol_length
+        
+        # Protección: asegurar que tenemos al menos 1 símbolo
+        if num_symbols == 0:
+            num_symbols = 1
+        
+        demodulated_symbols = []
+        
+        for sym_idx in range(num_symbols):
+            # Extraer un símbolo OFDM (CP + datos)
+            start_idx = sym_idx * symbol_length
+            end_idx = start_idx + symbol_length
+            
+            # Protección: no pasar de los límites de la señal
+            if end_idx > len(received_signal):
+                end_idx = len(received_signal)
+            
+            received_ofdm = received_signal[start_idx:end_idx]
+            
+            # Si la longitud es insuficiente, rellenar con ceros
+            if len(received_ofdm) < symbol_length:
+                received_ofdm = np.pad(received_ofdm, (0, symbol_length - len(received_ofdm)), 'constant')
+            
+            # Remover prefijo cíclico
+            signal_without_cp = received_ofdm[self.config.cp_length:]
+            
+            # FFT para obtener símbolo en dominio frecuencia
+            frequency_domain = np.fft.fft(signal_without_cp) / np.sqrt(self.config.N)
+            
+            demodulated_symbols.append(frequency_domain)
+        
+        return demodulated_symbols
     
     def _demodulate_ofdm(self, received_signal: np.ndarray) -> np.ndarray:
         """
@@ -287,18 +466,14 @@ class LTEReceiver:
         
         Asume sincronización perfecta (conocemos dónde está el símbolo OFDM)
         """
-        expected_length = self.config.N + self.config.cp_length
-        
-        # Tomar primera muestra de símbolo OFDM
-        received_ofdm = received_signal[:expected_length]
-        
-        # Remover prefijo cíclico
-        signal_without_cp = received_ofdm[self.config.cp_length:]
-        
-        # FFT
-        frequency_domain = np.fft.fft(signal_without_cp) / np.sqrt(self.config.N)
-        
-        return frequency_domain
+        symbols = self._demodulate_ofdm_stream(received_signal)
+        # Concatenar todos los símbolos en un array
+        if len(symbols) > 1:
+            return np.concatenate(symbols)
+        elif len(symbols) == 1:
+            return symbols[0]
+        else:
+            return np.array([])
     
     def _detect_symbols(self, received_symbols: np.ndarray) -> np.ndarray:
         """

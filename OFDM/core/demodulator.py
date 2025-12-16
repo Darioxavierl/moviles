@@ -1,22 +1,44 @@
 """
 Demodulador OFDM - Recupera símbolos de la señal OFDM recibida
+
+Soporta dos modos:
+- Modo 'simple': Demodulación OFDM clásica (sin estimación de canal)
+- Modo 'lte': Demodulación OFDM con estimación de canal y ecualización (usando LTEReceiver)
 """
 import numpy as np
 from core.modulator import QAMModulator
 
 
 class OFDMDemodulator:
-    """Demodulador OFDM que implementa sincronización y FFT"""
+    """Demodulador OFDM que implementa sincronización y FFT con soporte LTE"""
     
-    def __init__(self, config):
+    def __init__(self, config, mode='simple', enable_equalization=False):
         """
         Inicializa el demodulador OFDM
         
         Args:
             config: Objeto LTEConfig con parámetros de configuración
+            mode: 'simple' (clásico) o 'lte' (con estimación de canal y ecualización)
+            enable_equalization: Si True, habilita ecualización en modo LTE
         """
         self.config = config
+        self.mode = mode
+        self.enable_equalization = enable_equalization
         self.qam_demodulator = QAMModulator(config.modulation)
+        
+        # Inicializar receptor LTE si es necesario
+        if self.mode == 'lte':
+            try:
+                from core.lte_receiver import LTEReceiver
+                self.lte_receiver = LTEReceiver(config, cell_id=0, 
+                                               enable_equalization=enable_equalization)
+            except ImportError:
+                # Si no se puede importar LTEReceiver, usar modo simple
+                print("Warning: LTEReceiver no disponible, usando modo simple")
+                self.mode = 'simple'
+                self.lte_receiver = None
+        else:
+            self.lte_receiver = None
     
     def demodulate(self, received_signal):
         """
@@ -57,17 +79,38 @@ class OFDMDemodulator:
         
         return received_symbols
     
-    def demodulate_stream(self, received_signal, num_ofdm_symbols):
+    def demodulate_stream(self, received_signal, num_ofdm_symbols=None, resource_grid=None):
         """
         Demodula un stream de señales OFDM
         
+        En modo LTE, usa el receptor LTE con estimación de canal y ecualización.
+        En modo simple, usa FFT clásica.
+        
         Args:
             received_signal: Stream de señal recibida
-            num_ofdm_symbols: Número de símbolos OFDM a demodular
+            num_ofdm_symbols: Número de símbolos OFDM a demodular (para modo simple)
+            resource_grid: Grid de recursos LTE (para modo LTE, opcional)
             
         Returns:
             tuple: (all_symbols_demodulated, bits_recovered)
         """
+        # Si estamos en modo LTE y tenemos el receptor disponible
+        if self.mode == 'lte' and self.lte_receiver is not None:
+            # Usar receptor LTE con estimación de canal y ecualización
+            result = self.lte_receiver.receive_and_decode(received_signal)
+            
+            # Extraer datos
+            symbols_data = result['symbols_data_only']
+            bits = self.qam_demodulator.symbols_to_bits(symbols_data)
+            
+            return symbols_data, bits
+        
+        # Modo simple: FFT clásica
+        if num_ofdm_symbols is None:
+            # Calcular automáticamente
+            samples_per_symbol = self.config.N + self.config.cp_length
+            num_ofdm_symbols = int(np.ceil(len(received_signal) / samples_per_symbol))
+        
         samples_per_symbol = self.config.N + self.config.cp_length
         all_symbols = []
         all_bits = []

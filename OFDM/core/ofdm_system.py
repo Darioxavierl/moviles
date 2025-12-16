@@ -15,7 +15,7 @@ class OFDMSystem:
     """Sistema OFDM completo que integra todos los componentes"""
     
     def __init__(self, config=None, channel_type='awgn', itu_profile=None, 
-                 frequency_ghz=2.0, velocity_kmh=0, mode='lte'):
+                 frequency_ghz=2.0, velocity_kmh=0, mode='lte', enable_equalization=True):
         """
         Inicializa el sistema OFDM
         
@@ -26,18 +26,20 @@ class OFDMSystem:
             frequency_ghz: Frecuencia portadora en GHz (para Rayleigh)
             velocity_kmh: Velocidad en km/h (para Rayleigh)
             mode: 'lte' (nuevo mapeo LTE) o 'simple' (modo clásico)
+            enable_equalization: Si True, habilita ecualización en modo LTE
         """
         if config is None:
             config = LTEConfig()
         
         self.config = config
         self.modulator = OFDMModulator(config, mode=mode)
-        self.demodulator = OFDMDemodulator(config)
+        self.demodulator = OFDMDemodulator(config, mode=mode, enable_equalization=enable_equalization)
         self.channel_type = channel_type
         self.itu_profile = itu_profile
         self.frequency_ghz = frequency_ghz
         self.velocity_kmh = velocity_kmh
         self.mode = mode
+        self.enable_equalization = enable_equalization
         
         # Calcular Fs desde config
         fs = config.fs if hasattr(config, 'fs') else 15.36e6  # LTE default
@@ -479,7 +481,7 @@ class OFDMSystem:
             
             # 🔧 IMPORTANTE: Reinicializar modulador y demodulador con la nueva modulación
             self.modulator = OFDMModulator(self.config, mode=self.mode)
-            self.demodulator = OFDMDemodulator(self.config)
+            self.demodulator = OFDMDemodulator(self.config, mode=self.mode, enable_equalization=self.enable_equalization)
             self.symbol_detector = SymbolDetector(
                 self.modulator.get_qam_modulator().get_constellation()
             )
@@ -517,7 +519,7 @@ class OFDMSystem:
         self.config.modulation = original_modulation
         self.config.bits_per_symbol = original_bits_per_symbol
         self.modulator = OFDMModulator(self.config, mode=self.mode)
-        self.demodulator = OFDMDemodulator(self.config)
+        self.demodulator = OFDMDemodulator(self.config, mode=self.mode, enable_equalization=self.enable_equalization)
         self.symbol_detector = SymbolDetector(
             self.modulator.get_qam_modulator().get_constellation()
         )

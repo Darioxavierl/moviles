@@ -227,7 +227,14 @@ class OFDMModulator:
             tuple: (signal_concatenated, all_symbols, mapping_infos)
                    donde mapping_infos es None en modo simple
         """
-        bits_per_ofdm = self.config.Nc * self.config.bits_per_symbol
+        # Calcular bits por símbolo OFDM
+        if self.mode == 'lte' and self.resource_mapper is not None:
+            # Usar el número REAL de datos subportadoras en modo LTE
+            num_data_subcarriers = len(self.resource_mapper.get_data_indices())
+            bits_per_ofdm = num_data_subcarriers * self.config.bits_per_symbol
+        else:
+            # Modo simple: usar la configuración nominal Nc
+            bits_per_ofdm = self.config.Nc * self.config.bits_per_symbol
         
         # Calcular número de símbolos OFDM necesarios
         if num_ofdm_symbols is None:
