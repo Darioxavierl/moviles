@@ -267,6 +267,107 @@ class OFDMModulator:
         
         return signal_concatenated, all_symbols, mapping_infos if self.mode == 'lte' else None
     
+    def modulate_stream_vectorized(self, bits, num_ofdm_symbols=None):
+        """
+        Modula un stream de bits a múltiples símbolos OFDM usando VECTORIZACIÓN.
+        
+        Este método procesa TODOS los símbolos OFDM simultáneamente en lugar de uno por uno.
+        Es más rápido para grandes cantidades de datos.
+        
+        Args:
+            bits: Array de bits
+            num_ofdm_symbols: Número de símbolos OFDM a generar (opcional)
+            
+        Returns:
+            tuple: (signal_concatenated, all_symbols, mapping_infos)
+                   Idéntico a modulate_stream(), pero más rápido
+        """
+        # Calcular bits por símbolo OFDM
+        if self.mode == 'lte' and self.resource_mapper is not None:
+            # Usar el número REAL de datos subportadoras en modo LTE
+            num_data_subcarriers = len(self.resource_mapper.get_data_indices())
+            bits_per_ofdm = num_data_subcarriers * self.config.bits_per_symbol
+        else:
+            # Modo simple: usar la configuración nominal Nc
+            bits_per_ofdm = self.config.Nc * self.config.bits_per_symbol
+        
+        # Calcular número de símbolos OFDM necesarios
+        if num_ofdm_symbols is None:
+            num_ofdm_symbols = int(np.ceil(len(bits) / bits_per_ofdm))
+        
+        # Rellenar bits si es necesario
+        total_bits_needed = num_ofdm_symbols * bits_per_ofdm
+        if len(bits) < total_bits_needed:
+            bits = np.pad(bits, (0, total_bits_needed - len(bits)), 'constant')
+        
+        # ===================================================
+        # PASO 1: VECTORIZAR BITS → QAM SÍMBOLOS
+        # ===================================================
+        # Reshape: reorganizar todos los bits de una vez
+        bits_reshaped = bits[:total_bits_needed].reshape(num_ofdm_symbols, bits_per_ofdm)
+        
+        # Convertir todos los chunks de bits a símbolos QAM simultáneamente
+        all_qam_symbols = []
+        for i in range(num_ofdm_symbols):
+            qam_symbols = self.qam_modulator.bits_to_symbols(bits_reshaped[i])
+            all_qam_symbols.append(qam_symbols)
+        
+        # ===================================================
+        # PASO 2: MAPEO A SUBPORTADORAS (TODO DE UNA VEZ)
+        # ===================================================
+        if self.mode == 'lte':
+            # Mapeo LTE: procesar todos los símbolos
+            signal_stream = []
+            mapping_infos = []
+            
+            for i, qam_symbols in enumerate(all_qam_symbols):
+                grid_mapped, mapping_info = self.resource_mapper.map_symbols(qam_symbols)
+                
+                # IFFT
+                time_domain = np.fft.ifft(grid_mapped) * np.sqrt(self.config.N)
+                
+                # Agregar CP
+                ofdm_symbol_with_cp = np.concatenate([
+                    time_domain[-self.config.cp_length:],
+                    time_domain
+                ])
+                
+                signal_stream.append(ofdm_symbol_with_cp)
+                mapping_infos.append(mapping_info)
+            
+            all_symbols = all_qam_symbols
+        else:
+            # Modo simple: mapeo secuencial a subportadoras
+            signal_stream = []
+            all_symbols = []
+            
+            for qam_symbols in all_qam_symbols:
+                # Mapeo simple
+                symbols_parallel = np.zeros(self.config.N, dtype=complex)
+                num_data_symbols = min(len(qam_symbols), self.config.Nc)
+                symbols_parallel[:num_data_symbols] = qam_symbols[:num_data_symbols]
+                
+                # IFFT
+                time_domain = np.fft.ifft(symbols_parallel) * np.sqrt(self.config.N)
+                
+                # Agregar CP
+                ofdm_symbol_with_cp = np.concatenate([
+                    time_domain[-self.config.cp_length:],
+                    time_domain
+                ])
+                
+                signal_stream.append(ofdm_symbol_with_cp)
+                all_symbols.append(qam_symbols[:num_data_symbols])
+            
+            mapping_infos = None
+        
+        # ===================================================
+        # PASO 3: CONCATENAR TODOS LOS SÍMBOLOS
+        # ===================================================
+        signal_concatenated = np.concatenate(signal_stream)
+        
+        return signal_concatenated, all_symbols, mapping_infos if self.mode == 'lte' else None
+    
     def get_qam_modulator(self):
         """Retorna el modulador QAM para acceso directo"""
         return self.qam_modulator

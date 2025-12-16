@@ -164,7 +164,7 @@ class OFDMSystem:
             'num_symbols': num_ofdm_symbols
         }
     
-    def transmit(self, bits, snr_db=10.0, return_time=False):
+    def transmit(self, bits, snr_db=10.0, return_time=False, use_vectorized=False):
         """
         Transmite bits a través del sistema OFDM
         
@@ -177,6 +177,7 @@ class OFDMSystem:
             bits: Array de bits a transmitir
             snr_db: SNR en dB
             return_time: Si True, retorna tiempo de transmisión en dict
+            use_vectorized: Si True, usa método vectorizado (más rápido para datos grandes)
             
         Returns:
             dict: Resultados de transmisión con todas las métricas
@@ -191,7 +192,10 @@ class OFDMSystem:
         
         # Modular bits (puede rellenar con ceros)
         # Nota: modulate_stream retorna (signal, symbols_list, mapping_infos)
-        signal_transmitted, symbols_transmitted, mapping_infos = self.modulator.modulate_stream(bits)
+        if use_vectorized and hasattr(self.modulator, 'modulate_stream_vectorized'):
+            signal_transmitted, symbols_transmitted, mapping_infos = self.modulator.modulate_stream_vectorized(bits)
+        else:
+            signal_transmitted, symbols_transmitted, mapping_infos = self.modulator.modulate_stream(bits)
         
         # ✨ CALCULAR PAPR POR SÍMBOLO OFDM (más preciso)
         papr_per_symbol_info = self.calculate_papr_per_symbol(signal_transmitted)
