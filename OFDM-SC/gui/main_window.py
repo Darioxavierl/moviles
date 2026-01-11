@@ -280,7 +280,7 @@ class OFDMSimulatorGUI(QMainWindow):
         layout.addWidget(QLabel("Modulación:"), 0, 0)
         self.modulation_combo = QComboBox()
         self.modulation_combo.addItems(MODULATION_SCHEMES)
-        self.modulation_combo.currentTextChanged.connect(self.update_config)
+        self.modulation_combo.currentTextChanged.connect(self.validate_modulation_sc_fdm)
         layout.addWidget(self.modulation_combo, 0, 1)
         
         # Ancho de banda
@@ -310,7 +310,7 @@ class OFDMSimulatorGUI(QMainWindow):
         from PyQt6.QtWidgets import QCheckBox
         self.sc_fdm_checkbox = QCheckBox("Habilitar SC-FDM")
         self.sc_fdm_checkbox.setChecked(False)
-        self.sc_fdm_checkbox.stateChanged.connect(self.update_config)
+        self.sc_fdm_checkbox.stateChanged.connect(self.validate_modulation_sc_fdm)
         layout.addWidget(self.sc_fdm_checkbox, 4, 1)
         
         group.setLayout(layout)
@@ -468,6 +468,35 @@ class OFDMSimulatorGUI(QMainWindow):
         layout.addWidget(self.tabs)
         
         return panel
+    
+    def validate_modulation_sc_fdm(self):
+        """
+        Valida que la modulación sea compatible con SC-FDMA.
+        En LTE SC-FDMA (uplink) solo se permiten: QPSK, 16-QAM, 64-QAM
+        """
+        from PyQt6.QtWidgets import QMessageBox
+        
+        enable_sc_fdm = self.sc_fdm_checkbox.isChecked()
+        modulation = self.modulation_combo.currentText()
+        
+        # Modulaciones permitidas en SC-FDMA
+        sc_fdm_allowed = ['QPSK', '16-QAM', '64-QAM']
+        
+        if enable_sc_fdm and modulation not in sc_fdm_allowed:
+            # Mostrar advertencia
+            QMessageBox.warning(
+                self,
+                "Modulación no compatible",
+                f"SC-FDMA solo soporta: QPSK, 16-QAM, 64-QAM.\n"
+                f"La modulación {modulation} no es válida para SC-FDMA.\n\n"
+                f"Cambiando a QPSK..."
+            )
+            # Cambiar a QPSK automáticamente
+            self.modulation_combo.setCurrentText('QPSK')
+            return
+        
+        # Si la validación pasa, actualizar configuración
+        self.update_config()
     
     def update_config(self):
         """Actualiza la configuración del sistema"""
