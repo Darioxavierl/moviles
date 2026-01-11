@@ -48,13 +48,15 @@ class OFDMSystem:
         
         # Inicializar canal
         if channel_type == 'rayleigh_mp':
+            # 🔧 CORREGIDO: Forzar velocidad mínima 3 km/h para evitar canal estático
+            velocity_corrected = max(velocity_kmh, 3.0)
             self.channel = ChannelSimulator(
                 channel_type='rayleigh_mp',
                 snr_db=10.0,
                 fs=fs,
                 itu_profile=itu_profile,
                 frequency_ghz=frequency_ghz,
-                velocity_kmh=velocity_kmh
+                velocity_kmh=velocity_corrected
             )
         else:
             self.channel = ChannelSimulator('awgn', snr_db=10.0)
@@ -646,17 +648,19 @@ class OFDMSystem:
             return np.mean(signal ** 2)
     
     def collect_papr_for_all_modulations(self, num_bits, n_simulations, snr_db=25.0, 
-                                         progress_callback=None):
+                                         progress_callback=None, bits=None):
         """
         Colecta valores PAPR para todas las modulaciones (QPSK y 16-QAM) en OFDM y SC-FDM.
         
         PAPR es independiente de SNR, así que usa un SNR fijo (25 dB) para eficiencia.
         
         Args:
-            num_bits: Número de bits por simulación
-            n_simulations: Número de simulaciones para colectar PAPR
+            num_bits: Número de bits por simulación (o total si bits es especificado)
+            n_simulations: Número de simulaciones (ignorado si bits es especificado)
             snr_db: SNR fijo en dB (PAPR no depende de SNR)
             progress_callback: Función para reportar progreso
+            bits: Bits específicos a transmitir (ej. de imagen). Si se provee, 
+                  se usa una sola transmisión con todos estos bits.
             
         Returns:
             dict: PAPR valores para cada {modulación}_{modo}:
@@ -697,12 +701,9 @@ class OFDMSystem:
                 
                 papr_values = []
                 
-                # Ejecutar n_simulations
-                for sim in range(n_simulations):
-                    # Generar bits aleatorios
-                    bits = np.random.randint(0, 2, num_bits)
-                    
-                    # Transmitir
+                # 🔧 Si se proveen bits específicos (ej. imagen), usar una sola transmisión
+                if bits is not None:
+                    # Una sola transmisión con todos los bits de la imagen
                     results = self.transmit(bits, snr_db=snr_db, return_time=False)
                     
                     # Extraer PAPR de la señal transmitida
@@ -713,9 +714,29 @@ class OFDMSystem:
                     
                     # Reportar progreso
                     if progress_callback:
-                        progress = ((current_config - 1) * n_simulations + sim + 1) / (total_configs * n_simulations) * 100
-                        msg = f"PAPR: {config_label} - Sim {sim+1}/{n_simulations}"
+                        progress = (current_config / total_configs) * 100
+                        msg = f"PAPR: {config_label} - {len(papr_values)} símbolos"
                         progress_callback(int(progress), msg)
+                else:
+                    # Ejecutar n_simulations con bits aleatorios
+                    for sim in range(n_simulations):
+                        # Generar bits aleatorios
+                        random_bits = np.random.randint(0, 2, num_bits)
+                        
+                        # Transmitir
+                        results = self.transmit(random_bits, snr_db=snr_db, return_time=False)
+                        
+                        # Extraer PAPR de la señal transmitida
+                        if 'papr_no_cp' in results and 'papr_values' in results['papr_no_cp']:
+                            papr_vals = results['papr_no_cp']['papr_values']
+                            if papr_vals is not None:
+                                papr_values.extend(papr_vals)
+                        
+                        # Reportar progreso
+                        if progress_callback:
+                            progress = ((current_config - 1) * n_simulations + sim + 1) / (total_configs * n_simulations) * 100
+                            msg = f"PAPR: {config_label} - Sim {sim+1}/{n_simulations}"
+                            progress_callback(int(progress), msg)
                 
                 # Almacenar valores PAPR para esta configuración
                 papr_results[config_label] = np.array(papr_values) if papr_values else np.array([])

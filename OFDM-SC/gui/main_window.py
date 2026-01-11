@@ -103,7 +103,8 @@ class SimulationWorker(QThread):
                 pass
         
         # Calcular número de bits
-        num_bits = len(bits_to_sweep) if bits_to_sweep is not None else 50000
+        # 🔧 CORREGIDO: Aumentado a 100,000 para evitar BER=0 en SNR alto
+        num_bits = len(bits_to_sweep) if bits_to_sweep is not None else 100000
         
         self.progress.emit(20, f"Iniciando barrido SNR ({len(self.params['snr_range'])} valores)...")
         
@@ -130,13 +131,28 @@ class SimulationWorker(QThread):
             except:
                 pass
         
-        # Colectar PAPR con 100 simulaciones (aprox 50K símbolos total)
-        papr_results = self.ofdm_system.collect_papr_for_all_modulations(
-            num_bits=5000,  # Bits por simulación
-            n_simulations=10,  # Total simulaciones
-            snr_db=25.0,  # SNR fijo (PAPR no depende de SNR)
-            progress_callback=papr_progress_callback
-        )
+        # 🔧 MEJORADO: Usar imagen completa para PAPR (curvas suaves)
+        if bits_to_sweep is not None:
+            # Si hay imagen, usar todos sus bits en UNA transmisión
+            # Esto genera ~5000-6000 símbolos OFDM → curvas CCDF suaves
+            self.progress.emit(85, f"Calculando PAPR con imagen completa ({len(bits_to_sweep)} bits)...")
+            papr_results = self.ofdm_system.collect_papr_for_all_modulations(
+                num_bits=len(bits_to_sweep),  # Usar TODOS los bits de la imagen
+                n_simulations=1,              # Una sola transmisión (ya tiene muchos símbolos)
+                snr_db=25.0,                  # SNR fijo (PAPR no depende de SNR)
+                progress_callback=papr_progress_callback,
+                bits=bits_to_sweep            # Pasar los bits específicos de la imagen
+            )
+        else:
+            # Sin imagen: usar múltiples simulaciones con bits aleatorios
+            # Aumentado a 1000 simulaciones para curvas más suaves
+            self.progress.emit(85, "Calculando PAPR (1000 simulaciones)...")
+            papr_results = self.ofdm_system.collect_papr_for_all_modulations(
+                num_bits=5000,                # Bits por simulación
+                n_simulations=1000,           # 1000 simulaciones → ~8300 símbolos
+                snr_db=25.0,                  # SNR fijo
+                progress_callback=papr_progress_callback
+            )
         
         # Agregar resultados PAPR a los resultados totales
         all_results['papr_results'] = papr_results
