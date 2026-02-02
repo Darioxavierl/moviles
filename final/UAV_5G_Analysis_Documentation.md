@@ -264,10 +264,19 @@ Analiza escenarios multi-UAV evaluando interferencia entre usuarios, optimizaci�
 - **System capacity** con diferentes densidades
 
 ### 📈 **Gráficas que Devuelve**
-1. **SINR heatmap**: Matriz de interferencia UAV vs UAV
-2. **Throughput comparison**: Barras por escenario de densidad
-3. **3D UAV positions**: Posiciones de UAVs con SINR color-coding
-4. **Performance vs density**: Curva capacidad vs número de UAVs
+**Tab "Gráficos y Resultados" (4 gráficos en layout 2×2):**
+1. **SINR Comparison by Scenario** (Arriba Izq): Barras agrupadas de SINR promedio + mínimo por escenario
+2. **Throughput Analysis** (Arriba Derecha): Barras de throughput total + línea de throughput promedio por UAV
+3. **Fairness Analysis** (Abajo Izq): Diagramas de caja mostrando distribución de throughput por escenario
+4. **Resumen de Resultados** (Abajo Derecha): Mejores configuraciones y recomendaciones
+
+**Tab "Escena 3D":**
+- **✅ Munich 3D Urban** con 6 edificios realistas
+- **✅ UAVs coloreados por SINR**: Verde (>15dB), Amarillo (10-15dB), Rojo (<10dB)
+- **✅ 5 escenarios** visualizados: Baja, Media, Alta densidad, Agrupados, Distribuidos
+- **✅ Enlaces de interferencia**: Líneas rojas entre UAVs con interferencia significativa
+- **✅ gNB central**: Torre roja principal
+- **✅ Tamaño proporcional**: Tamaño UAV proporcional al throughput logrado
 
 **Resultado típico**: 166.5 Mbps/UAV en escenario de baja densidad
 
