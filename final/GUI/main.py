@@ -66,11 +66,14 @@ class SimulationWorker(QThread):
             output_dir = os.path.join(os.path.dirname(__file__), "outputs")
             os.makedirs(output_dir, exist_ok=True)
             
-            # Ejecutar análisis real
-            result = run_mimo_analysis_gui(
-                output_dir=output_dir, 
-                progress_callback=lambda msg: self.progress.emit(msg)
-            )
+            # Emitir progreso inicial
+            self.progress.emit("Iniciando análisis MIMO con Sionna RT...")
+            
+            # Ejecutar análisis real (sin progress_callback - función no lo soporta)
+            result = run_mimo_analysis_gui(output_dir=output_dir)
+            
+            if result:
+                self.progress.emit("Análisis MIMO completado exitosamente")
             
             return result
             
@@ -1017,7 +1020,17 @@ class MainWindow(QMainWindow):
     def on_simulation_finished(self, result):
         """Simulación completada"""
         self.progress_bar.setVisible(False)
-        self.status_bar.showMessage(f"Completado: {result['type']}")
+        
+        # Determine simulation type from result structure
+        sim_type = "Análisis Desconocido"
+        if 'mimo_results' in result and 'beamforming_results' in result:
+            sim_type = "MIMO + Beamforming"
+        elif 'summary' in result:
+            sim_type = result.get('summary', 'Simulación').split(':')[0]
+        elif 'type' in result:
+            sim_type = result['type']
+            
+        self.status_bar.showMessage(f"Completado: {sim_type}")
         
         # Actualizar configuración mostrada
         if 'config' in result:

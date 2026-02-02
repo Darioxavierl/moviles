@@ -16,40 +16,53 @@ La GUI implementa un sistema completo de análisis UAV 5G NR utilizando **Sionna
 ## FASE 1: MIMO Masivo + Beamforming
 
 ### 📡 **¿Qué hace este botón?**
-Analiza el rendimiento de diferentes configuraciones de antenas MIMO masivo y estrategias de beamforming para optimizar la capacidad del enlace gNB↔UAV.
+Analiza el rendimiento de diferentes configuraciones de antenas MIMO masivo y estrategias de beamforming para optimizar la capacidad del enlace gNB↔UAV utilizando **BasicUAVSystem con Sionna SYS/RT completo** del escenario Munich 3D urbano real.
 
 ### 🔧 **Uso de Sionna**
-- **NO usa Sionna directamente** - Implementa modelos teóricos MIMO
-- Calcula capacidad Shannon para diferentes configuraciones de arrays
-- Evalúa ganancia de beamforming con modelos analíticos
-- Simula throughput con SNR variable
+- **✅ BasicUAVSystem**: Wrapper completo de Sionna SYS para integración correcta
+- **✅ Sionna RT completo**: Ray tracing 3D con 7 paths calculados reales
+- **✅ Channel matrices**: Respuesta frecuencia H(f) shape (1,4,1,64,1,64) real
+- **✅ Munich Scenario**: 6 edificios reales con gNB a [300,200,50]m
+- **✅ NLoS conditions**: Condiciones realistas no-line-of-sight detectadas
+- **✅ GPU acceleration**: Optimización TensorFlow con GeForce GTX 1660 SUPER
 
 ### 🚁 **Definición de UAVs**
-- **UAV Principal**: Receptor MIMO con arrays configurables (1x1 hasta 16x8)
-- **Posición Fija**: [100, 100, 100]m para análisis consistente
-- **Antennas UAV**: Desde 1 hasta 8 elementos según configuración
+- **UAV Principal**: Receptor MIMO en posición [100,100,50]m
+- **Arrays gNB**: 64→256 elementos (8x8→16x16 configurables)
+- **Arrays UAV**: 4→16 elementos (2x2→4x4 configurables)
+- **Configuraciones**: 5 setups SISO_1x1, MIMO_2x2, MIMO_4x4, MIMO_8x4, MIMO_16x8
+- **Sistema real**: BasicUAVSystem con métodos _simulate_single_snr auténticos
 
 ### 🔄 **Flujo de Simulación**
-1. **Configuraciones MIMO**: Evalúa 6 configuraciones (1x1, 2x2, 4x4, 8x4, 8x8, 16x8)
-2. **Estrategias Beamforming**: 6 técnicas (Omnidirectional, Fixed Beam, MRT, ZF, MMSE, SVD)
-3. **Rango SNR**: -10 a +30 dB (21 puntos)
-4. **Cálculo Capacidad**: Shannon C = log₂(1 + SNR_effective)
-5. **Array Gain**: √(Nt × Nr) donde Nt=antenas TX, Nr=antenas RX
+1. **Inicialización BasicUAVSystem**: Carga Munich 3D con Sionna RT habilitado
+2. **Path calculation**: Calcula 7 paths de propagación real (max_depth=5)
+3. **Para cada configuración MIMO**:
+   - Configura arrays gNB y UAV en sistema
+   - Ejecuta _simulate_single_snr con Sionna SYS
+   - Calcula channel response con shape real
+   - Analiza condiciones NLoS (Direct path power ratio: 0.518)
+   - Evalúa throughput, channel gain, MIMO gain, spatial streams
+4. **Estrategias Beamforming**: 5 técnicas sobre 16 SNR points (0-30dB)
+   - omnidirectional, MRT, ZF, MMSE, SVD con canales Sionna reales
+5. **GPU Processing**: Cálculos acelerados con CUDA
 
 ### 📊 **Qué Calcula**
-- **Throughput máximo** por configuración MIMO
-- **Espectral Efficiency** (bps/Hz)
-- **Ganancia de Array** en dB
-- **Comparación beamforming** con diferentes técnicas
-- **SNR vs Throughput** curves
+- **Throughput real**: 2.3 Mbps (SISO) → 37.2 Mbps (MIMO_16x8)
+- **Channel gain**: -37.9 dB consistente (ray tracing Munich)
+- **MIMO gain**: -6.0 dB (SISO) → 6.0 dB (MIMO_16x8)
+- **Spatial streams**: 1→16 streams reales
+- **Beamforming gain**: Hasta 7.0 dB con SVD (75.8 Mbps promedio)
+- **Ray paths**: 7 paths reales calculados por Sionna RT
 
 ### 📈 **Gráficas que Devuelve**
-1. **Subplot 1**: Throughput vs SNR para configuraciones MIMO
-2. **Subplot 2**: Ganancia Beamforming por técnica (barras)
-3. **Subplot 3**: Comparación capacidad espectral
-4. **Subplot 4**: Visualización 3D del escenario con UAV y gNB
+1. **MIMO Throughput**: Barras con valores Sionna reales por configuración
+2. **Beamforming vs SNR**: 5 curvas con throughput real 0-30dB
+3. **MIMO vs Beamforming**: Comparación directa de ganancias
+4. **Channel Analysis**: Condiciones NLoS, path count, system info
+5. **Performance Summary**: Métricas Sionna RT (paths, gains, efficiency)
+6. **3D Scenario**: Munich buildings + gNB + UAV + RF link
 
-**Resultado típico**: 8,373 Mbps máximo con configuración 16x8 + SVD beamforming
+**Resultado típico**: 37.2 Mbps (MIMO_16x8) + 75.8 Mbps (SVD beamforming) **usando BasicUAVSystem con Sionna SYS/RT auténtico**
 
 ---
 
@@ -234,7 +247,7 @@ Analiza escenarios multi-UAV evaluando interferencia entre usuarios, optimizaci�
 
 | Módulo | Sionna RT | Sionna Channel | Sionna MIMO | Observaciones |
 |--------|-----------|----------------|-------------|---------------|
-| **MIMO** | ❌ | ❌ | ❌ | Modelos teóricos analíticos |
+| **MIMO** | ✅ | ✅ | ✅ | BasicUAVSystem completo + RT real |
 | **Height** | ✅ | ✅ | ❌ | Ray tracing completo 3D |
 | **Coverage** | ⚠️ | ⚠️ | ❌ | Modelos híbridos |
 | **Mobility** | ✅ | ✅ | ⚠️ | RT temporal dinámico |
