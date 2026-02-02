@@ -264,11 +264,12 @@ Analiza escenarios multi-UAV evaluando interferencia entre usuarios, optimizaci�
 - **System capacity** con diferentes densidades
 
 ### 📈 **Gráficas que Devuelve**
-**Tab "Gráficos y Resultados" (4 gráficos en layout 2×2):**
-1. **SINR Comparison by Scenario** (Arriba Izq): Barras agrupadas de SINR promedio + mínimo por escenario
-2. **Throughput Analysis** (Arriba Derecha): Barras de throughput total + línea de throughput promedio por UAV
-3. **Fairness Analysis** (Abajo Izq): Diagramas de caja mostrando distribución de throughput por escenario
-4. **Resumen de Resultados** (Abajo Derecha): Mejores configuraciones y recomendaciones
+**Tab "Gráficos y Resultados" (5 gráficos en layout 2×3):**
+1. **Posiciones UAV 3D** (Arriba Izq): 5 escenarios con UAVs coloreados - visualización espacial de interferencia
+2. **SINR Comparison** (Arriba Centro): Barras agrupadas de SINR promedio + mínimo por escenario
+3. **Throughput Analysis** (Arriba Derecha): Barras de throughput total + línea de promedio por UAV
+4. **Fairness Analysis** (Abajo Izq): Diagramas de caja mostrando distribución equitativa de throughput
+5. **Resumen de Resultados** (Abajo Centro): Mejores configuraciones y recomendaciones
 
 **Tab "Escena 3D":**
 - **✅ Munich 3D Urban** con 6 edificios realistas

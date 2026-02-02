@@ -338,62 +338,86 @@ class InterferenceAnalysisGUI:
         if progress_callback:
             progress_callback("Generando gráficos de interferencia...")
         
-        # Create comprehensive interference analysis plot (2x2 layout, sin heatmap)
-        fig = plt.figure(figsize=(16, 12))
+        # Create comprehensive interference analysis plot (2x3 layout, sin heatmap)
+        fig = plt.figure(figsize=(18, 12))
         
         # Colors for scenarios
         colors = ['#E74C3C', '#3498DB', '#2ECC71', '#F39C12', '#9B59B6']
         
-        # 1. SINR Comparison
-        ax1 = fig.add_subplot(2, 2, 1)
+        # 1. UAV Positions for Different Scenarios (3D)
+        ax1 = fig.add_subplot(2, 3, 1, projection='3d')
+        
+        for i, (scenario_key, result) in enumerate(results.items()):
+            positions = result['results']['uav_positions']
+            color = colors[i % len(colors)]
+            
+            # Plot UAV positions
+            ax1.scatter(positions[:, 0], positions[:, 1], positions[:, 2],
+                       c=color, s=100, alpha=0.7, 
+                       label=f"{result['name']} ({len(positions)} UAVs)")
+        
+        # gNB position
+        gnb_pos = self.munich_config['gnb_position']
+        ax1.scatter(*gnb_pos, s=400, c='red', marker='^', 
+                   label='gNB', alpha=1.0, edgecolors='darkred')
+        
+        ax1.set_xlabel('X [m]')
+        ax1.set_ylabel('Y [m]')
+        ax1.set_zlabel('Altura [m]')
+        ax1.set_title('Posiciones UAV - Escenarios Interferencia\nDistribución Espacial Multi-Scenario', fontweight='bold')
+        ax1.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=8)
+        ax1.grid(True, alpha=0.3)
+        
+        # 2. SINR Comparison
+        ax2 = fig.add_subplot(2, 3, 2)
         scenario_names = [result['name'][:15] for result in results.values()]
         avg_sinrs = [result['results']['avg_sinr_db'] for result in results.values()]
         min_sinrs = [result['results']['min_sinr_db'] for result in results.values()]
         
         x_pos = np.arange(len(scenario_names))
-        bars1 = ax1.bar(x_pos - 0.2, avg_sinrs, 0.4, label='SINR Promedio', 
+        bars1 = ax2.bar(x_pos - 0.2, avg_sinrs, 0.4, label='SINR Promedio', 
                        color=colors[:len(scenario_names)], alpha=0.8)
-        bars2 = ax1.bar(x_pos + 0.2, min_sinrs, 0.4, label='SINR Mínimo', 
+        bars2 = ax2.bar(x_pos + 0.2, min_sinrs, 0.4, label='SINR Mínimo', 
                        color=colors[:len(scenario_names)], alpha=0.5)
         
-        ax1.set_ylabel('SINR [dB]', fontweight='bold')
-        ax1.set_title('Comparación SINR por Escenario\nCalidad de Señal vs Interferencia', fontweight='bold')
-        ax1.set_xticks(x_pos)
-        ax1.set_xticklabels(scenario_names, rotation=45, ha='right')
-        ax1.legend()
-        ax1.grid(True, alpha=0.3)
-        
-        # Add value labels
-        for i, (bar1, bar2, avg_val, min_val) in enumerate(zip(bars1, bars2, avg_sinrs, min_sinrs)):
-            ax1.text(bar1.get_x() + bar1.get_width()/2., bar1.get_height() + 0.5,
-                    f'{avg_val:.1f}', ha='center', va='bottom', fontsize=8, fontweight='bold')
-        
-        # 2. Throughput Analysis
-        ax2 = fig.add_subplot(2, 2, 2)
-        total_throughputs = [result['results']['total_throughput'] for result in results.values()]
-        avg_throughputs = [result['results']['avg_throughput'] for result in results.values()]
-        
-        bars3 = ax2.bar(x_pos, total_throughputs, color=colors[:len(scenario_names)], alpha=0.7)
-        
-        # Secondary axis for average
-        ax2_twin = ax2.twinx()
-        line = ax2_twin.plot(x_pos, avg_throughputs, 'ro-', linewidth=3, markersize=8, 
-                            label='Throughput Promedio por UAV')
-        
-        ax2.set_ylabel('Throughput Total [Mbps]', fontweight='bold')
-        ax2_twin.set_ylabel('Throughput Promedio [Mbps]', fontweight='bold', color='red')
-        ax2.set_title('Análisis Throughput Multi-UAV\nCapacidad Total vs Individual', fontweight='bold')
+        ax2.set_ylabel('SINR [dB]', fontweight='bold')
+        ax2.set_title('Comparación SINR por Escenario\nCalidad de Señal vs Interferencia', fontweight='bold')
         ax2.set_xticks(x_pos)
         ax2.set_xticklabels(scenario_names, rotation=45, ha='right')
+        ax2.legend()
         ax2.grid(True, alpha=0.3)
         
         # Add value labels
+        for i, (bar1, bar2, avg_val, min_val) in enumerate(zip(bars1, bars2, avg_sinrs, min_sinrs)):
+            ax2.text(bar1.get_x() + bar1.get_width()/2., bar1.get_height() + 0.5,
+                    f'{avg_val:.1f}', ha='center', va='bottom', fontsize=8, fontweight='bold')
+        
+        # 3. Throughput Analysis
+        ax3 = fig.add_subplot(2, 3, 3)
+        total_throughputs = [result['results']['total_throughput'] for result in results.values()]
+        avg_throughputs = [result['results']['avg_throughput'] for result in results.values()]
+        
+        bars3 = ax3.bar(x_pos, total_throughputs, color=colors[:len(scenario_names)], alpha=0.7)
+        
+        # Secondary axis for average
+        ax3_twin = ax3.twinx()
+        line = ax3_twin.plot(x_pos, avg_throughputs, 'ro-', linewidth=3, markersize=8, 
+                            label='Throughput Promedio por UAV')
+        
+        ax3.set_ylabel('Throughput Total [Mbps]', fontweight='bold')
+        ax3_twin.set_ylabel('Throughput Promedio [Mbps]', fontweight='bold', color='red')
+        ax3.set_title('Análisis Throughput Multi-UAV\nCapacidad Total vs Individual', fontweight='bold')
+        ax3.set_xticks(x_pos)
+        ax3.set_xticklabels(scenario_names, rotation=45, ha='right')
+        ax3.grid(True, alpha=0.3)
+        
+        # Add value labels
         for i, (bar, total_val, avg_val) in enumerate(zip(bars3, total_throughputs, avg_throughputs)):
-            ax2.text(bar.get_x() + bar.get_width()/2., bar.get_height() + 10,
+            ax3.text(bar.get_x() + bar.get_width()/2., bar.get_height() + 10,
                     f'{total_val:.0f}', ha='center', va='bottom', fontsize=9, fontweight='bold')
         
-        # 3. Throughput Fairness Analysis
-        ax3 = fig.add_subplot(2, 2, 3)
+        # 4. Throughput Fairness Analysis
+        ax4 = fig.add_subplot(2, 3, 4)
         
         fairness_data = []
         scenario_labels = []
@@ -404,21 +428,21 @@ class InterferenceAnalysisGUI:
             scenario_labels.append(result['name'][:12])
         
         # Box plot for fairness
-        bp = ax3.boxplot(fairness_data, labels=scenario_labels, patch_artist=True)
+        bp = ax4.boxplot(fairness_data, labels=scenario_labels, patch_artist=True)
         
         # Color the boxes
         for patch, color in zip(bp['boxes'], colors[:len(scenario_labels)]):
             patch.set_facecolor(color)
             patch.set_alpha(0.7)
         
-        ax3.set_ylabel('Throughput Individual [Mbps]', fontweight='bold')
-        ax3.set_title('Análisis de Equidad (Fairness)\nDistribución Throughput por Escenario', fontweight='bold')
-        ax3.tick_params(axis='x', rotation=45)
-        ax3.grid(True, alpha=0.3)
+        ax4.set_ylabel('Throughput Individual [Mbps]', fontweight='bold')
+        ax4.set_title('Análisis de Equidad (Fairness)\nDistribución Throughput por Escenario', fontweight='bold')
+        ax4.tick_params(axis='x', rotation=45)
+        ax4.grid(True, alpha=0.3)
         
-        # 4. Summary and Recommendations
-        ax4 = fig.add_subplot(2, 2, 4)
-        ax4.axis('off')
+        # 5. Summary and Recommendations
+        ax5 = fig.add_subplot(2, 3, 5)
+        ax5.axis('off')
         
         # Summary statistics
         best_total = comparison['best_total_throughput']
@@ -453,11 +477,11 @@ Recomendación:
    {results[most_balanced['scenario']]['name']}
         """
         
-        ax4.text(0.05, 0.95, summary_text, transform=ax4.transAxes, fontsize=10,
+        ax5.text(0.05, 0.95, summary_text, transform=ax5.transAxes, fontsize=10,
                 verticalalignment='top', fontfamily='monospace',
                 bbox=dict(boxstyle="round,pad=0.4", 
                 facecolor='lightcyan', alpha=0.8))
-        ax4.set_title('Resumen de Resultados\n(Sionna Multi-UAV)', fontweight='bold')
+        ax5.set_title('Resumen de Resultados\n(Sionna Multi-UAV)', fontweight='bold')
         
         # Main title
         fig.suptitle('ANÁLISIS INTERFERENCIA MULTI-UAV - Sistema 5G NR Munich\nOptimización SINR y Gestión de Recursos', 
