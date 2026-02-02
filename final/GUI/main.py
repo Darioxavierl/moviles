@@ -50,10 +50,20 @@ class SimulationWorker(QThread):
             else:
                 raise ValueError(f"Tipo de simulación no soportado: {self.simulation_type}")
             
+            # Ensure result is always a dict
+            if result is None:
+                result = {'error': 'Simulation returned None', 'plots': [], 'summary': 'Error en simulación'}
+            
             self.finished.emit(result)
             
         except Exception as e:
+            error_result = {
+                'error': str(e), 
+                'plots': [], 
+                'summary': f'Error en simulación: {str(e)[:100]}'
+            }
             self.error.emit(f"Error en simulación: {str(e)}")
+            self.finished.emit(error_result)
 
     def run_mimo_simulation(self):
         """Simulación MIMO real integrada"""
@@ -79,7 +89,11 @@ class SimulationWorker(QThread):
             
         except Exception as e:
             self.error.emit(f"Error en análisis MIMO: {str(e)}")
-            return None
+            return {
+                'error': str(e),
+                'plots': [],
+                'summary': f"Error en análisis MIMO: {str(e)[:100]}"
+            }
 
     def run_height_simulation(self):
         """Simulación de altura real integrada"""
@@ -813,8 +827,12 @@ class ResultsTabWidget(QTabWidget):
     
     def update_scene_3d(self, scene_path):
         """Actualizar escena 3D cargando directamente en matplotlib canvas"""
+        print(f"🔍 update_scene_3d llamado con: {scene_path}")
+        
         if os.path.exists(scene_path):
             try:
+                print(f"✅ Archivo de escena 3D encontrado: {os.path.getsize(scene_path)} bytes")
+                
                 # Limpiar figura anterior
                 self.scene3d_figure.clear()
                 
@@ -828,8 +846,11 @@ class ResultsTabWidget(QTabWidget):
                 self.scene3d_figure.tight_layout()
                 self.scene3d_canvas.draw()
                 
+                print("✅ Escena 3D cargada exitosamente en GUI")
+                print("✅ Escena 3D cargada exitosamente en GUI")
+                
             except Exception as e:
-                print(f"Error cargando escena 3D {scene_path}: {e}")
+                print(f"❌ Error cargando escena 3D {scene_path}: {e}")
                 # Mostrar mensaje de error
                 self.scene3d_figure.clear()
                 ax = self.scene3d_figure.add_subplot(111)
@@ -841,6 +862,8 @@ class ResultsTabWidget(QTabWidget):
                 ax.axis('off')
                 self.scene3d_figure.tight_layout()
                 self.scene3d_canvas.draw()
+        else:
+            print(f"❌ Archivo de escena 3D no encontrado: {scene_path}")
 
 
 class MainWindow(QMainWindow):
@@ -1043,7 +1066,12 @@ class MainWindow(QMainWindow):
         
         # Actualizar escena 3D
         if 'scene_3d' in result and result['scene_3d']:
-            self.results_tabs.update_scene_3d(result['scene_3d'])
+            # Si scene_3d es una lista, tomar el primer elemento
+            scene_path = result['scene_3d'][0] if isinstance(result['scene_3d'], list) else result['scene_3d']
+            print(f"🎨 Actualizando escena 3D: {scene_path}")
+            self.results_tabs.update_scene_3d(scene_path)
+        else:
+            print("⚠️ No se encontró scene_3d en el resultado")
         
         print(f"Simulación completada: {result}")
     

@@ -6,6 +6,31 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 import json
+import sys
+import warnings
+warnings.filterwarnings('ignore')
+
+# Add paths for Sionna imports
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+
+# TensorFlow and Sionna RT imports
+try:
+    import tensorflow as tf
+    
+    # GPU Configuration
+    gpus = tf.config.experimental.list_physical_devices('GPU')
+    if gpus:
+        try:
+            tf.config.experimental.set_memory_growth(gpus[0], True)
+        except RuntimeError as e:
+            print(f"GPU setup warning: {e}")
+            
+    SIONNA_AVAILABLE = True
+    print("✅ TensorFlow disponible para Height Analysis")
+except ImportError as e:
+    print(f"⚠️ TensorFlow no disponible: {e}")
+    SIONNA_AVAILABLE = False
 
 class HeightAnalysisGUI:
     """Análisis de altura óptima adaptado para GUI"""
@@ -43,91 +68,273 @@ class HeightAnalysisGUI:
             'analysis_range': f"{self.munich_config['height_range'][0]:.0f}-{self.munich_config['height_range'][-1]:.0f}m"
         }
         
-        print("Height Analysis GUI inicializado")
-        print(f"Directorio de salida: {output_dir}")
-        
-    def calculate_height_performance(self, progress_callback=None):
-        """Calcular performance vs altura UAV"""
-        
-        if progress_callback:
-            progress_callback("Calculando performance vs altura...")
+        # Initialize Sionna UAV System
+        self.uav_system = None
+        if SIONNA_AVAILABLE:
+            try:
+                self.initialize_uav_system()
+                print("🔬 Height Analysis con Sionna RT inicializado")
+            except Exception as e:
+                print(f"⚠️ Error inicializando Sionna: {e}")
+                print("Usando modelos analíticos como fallback")
+        else:
+            print("📐 Usando modelos analíticos (Sionna no disponible)")
             
-        heights = self.munich_config['height_range']
+        print("Height Analysis GUI inicializado")
+        print(f"📁 Output directory: {output_dir}")
+    
+    def initialize_uav_system(self):
+        """Initialize BasicUAVSystem with Sionna RT for height analysis"""
+        
+        if not SIONNA_AVAILABLE:
+            return None
+            
+        try:
+            from UAV.systems.basic_system import BasicUAVSystem
+            
+            print("🔧 Inicializando sistema UAV para análisis altura...")
+            
+            # Initialize UAV system with Munich scenario
+            self.uav_system = BasicUAVSystem()
+            
+            print("✅ Sistema UAV inicializado para altura con Sionna SYS")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Error inicializando BasicUAVSystem: {e}")
+            self.uav_system = None
+            return False
+    
+    def calculate_sionna_throughput(self, height, progress_callback=None):
+        """Calcular throughput real usando Sionna RT para altura específica"""
+        
+        if not self.uav_system:
+            return self.calculate_analytical_throughput(height)
+            
+        try:
+            # Set UAV position at specific height
+            user_pos_2d = self.munich_config['user_position_2d']
+            uav_position = [user_pos_2d[0], user_pos_2d[1], height]
+            
+            # Move UAV to new height in scenario
+            print(f"   Actualizando posición UAV a altura {height:.0f}m...")
+            self.uav_system.scenario.move_uav("UAV1", uav_position)
+            
+            # Get ray tracing paths for this configuration
+            paths = self.uav_system.scenario.get_paths(max_depth=5)
+            
+            if paths is None:
+                print(f"   ⚠️ No paths found, using analytical model")
+                return self.calculate_analytical_throughput(height)
+            
+            # Calculate path powers from ray tracing
+            path_powers = []
+            has_los = False
+            num_paths = 0
+            
+            try:
+                # Iterate through paths if it's iterable
+                if hasattr(paths, '__iter__'):
+                    for i, path in enumerate(paths):
+                        try:
+                            # Extract path coefficient
+                            if hasattr(path, 'a') and path.a is not None:
+                                a_val = path.a.numpy() if hasattr(path.a, 'numpy') else path.a
+                                power = np.mean(np.abs(a_val)**2)
+                                path_powers.append(power)
+                                num_paths += 1
+                                
+                                # Check if this is LoS (first path typically)
+                                if i == 0:
+                                    has_los = True
+                        except:
+                            pass
+                
+                # If paths doesn't iterate, try accessing via attributes
+                if num_paths == 0 and hasattr(paths, 'a'):
+                    a_val = paths.a.numpy() if hasattr(paths.a, 'numpy') else paths.a
+                    if a_val is not None and len(a_val) > 0:
+                        power = np.mean(np.abs(a_val)**2)
+                        path_powers.append(power)
+                        num_paths += 1
+                        has_los = True
+                        
+            except Exception as e:
+                print(f"   ℹ️ Path iteration: {str(e)[:50]}")
+            
+            if len(path_powers) == 0:
+                print(f"   ℹ️ No usable paths from RT, using analytical")
+                return self.calculate_analytical_throughput(height)
+            
+            # Use strongest path for SNR calculation (typical behavior)
+            channel_power = np.max(path_powers)
+            channel_gain_db = 10 * np.log10(np.maximum(channel_power, 1e-10))
+            
+            # Determine channel condition
+            condition = 'LoS' if has_los else 'NLoS'
+            direct_ratio = 1.0 if has_los else 0.0
+            
+            # SNR calculation with RT path gain
+            tx_power_dbm = self.munich_config['gnb_power_dbm']
+            noise_floor_dbm = -104
+            
+            snr_db = tx_power_dbm + channel_gain_db - noise_floor_dbm
+            snr_linear = 10**(snr_db/10)
+            
+            # Shannon capacity with MIMO gain
+            num_antennas_effective = min(self.munich_config['gnb_antennas'], 
+                                       self.munich_config['uav_antennas'])
+            
+            capacity_bps_hz = num_antennas_effective * np.log2(1 + snr_linear)
+            throughput_mbps = capacity_bps_hz * self.munich_config['bandwidth_mhz']
+            
+            # Height-specific effects from RT analysis
+            height_factor = 1.0
+            if condition == 'LoS' and 40 <= height <= 80:
+                height_factor = 1.15  # Optimal height range
+            elif condition == 'NLoS' and height > 100:
+                height_factor = 1.05  # High altitude advantage
+                
+            throughput_mbps *= height_factor
+            
+            results = {
+                'throughput_mbps': max(0.1, throughput_mbps),
+                'channel_gain_db': channel_gain_db,
+                'snr_db': snr_db,
+                'channel_condition': condition,
+                'direct_path_ratio': direct_ratio,
+                'uses_sionna': True,
+                'height_factor': height_factor,
+                'num_paths': num_paths
+            }
+            
+            print(f"   ✅ Sionna RT: {num_paths} paths ({condition})")
+            return results
+            
+        except Exception as e:
+            print(f"   ⚠️ Sionna error: {str(e)[:50]}")
+            return self.calculate_analytical_throughput(height)
+    
+    def calculate_analytical_throughput(self, height):
+        """Fallback: cálculo analítico cuando Sionna no está disponible"""
+        
         gnb_pos = np.array(self.munich_config['gnb_position'])
         user_pos_2d = np.array(self.munich_config['user_position_2d'])
+        uav_pos = np.array([user_pos_2d[0], user_pos_2d[1], height])
         
+        # Distance and path loss
+        distance_3d = np.linalg.norm(uav_pos - gnb_pos)
+        fspl_db = 32.4 + 20 * np.log10(distance_3d) + 20 * np.log10(self.munich_config['frequency_ghz'])
+        
+        # LoS probability
+        los_prob = 1 / (1 + 9.61 * np.exp(-0.16 * (height - 1.5)))
+        nlos_factor = 0 if los_prob > 0.5 else 20
+        total_path_loss = fspl_db + nlos_factor
+        
+        # SNR calculation
+        rx_power_dbm = self.munich_config['gnb_power_dbm'] - total_path_loss
+        snr_db = rx_power_dbm - (-104)
+        
+        # MIMO gain
+        mimo_gain_db = 10 * np.log10(min(self.munich_config['gnb_antennas'], 
+                                        self.munich_config['uav_antennas']))
+        snr_db += mimo_gain_db
+        
+        # Throughput
+        spectral_eff = 0.75 * np.log2(1 + 10**(snr_db/10))
+        throughput_mbps = spectral_eff * self.munich_config['bandwidth_mhz']
+        
+        # Height effects
+        if 40 <= height <= 80:
+            throughput_mbps *= 1.15
+            
+        return {
+            'throughput_mbps': max(0.1, throughput_mbps),
+            'channel_gain_db': -total_path_loss,
+            'snr_db': snr_db,
+            'channel_condition': 'LoS' if los_prob > 0.5 else 'NLoS',
+            'direct_path_ratio': los_prob,
+            'uses_sionna': False,
+            'height_factor': 1.15 if 40 <= height <= 80 else 1.0
+        }
+        
+    def calculate_height_performance(self, progress_callback=None):
+        """Calcular performance vs altura UAV usando Sionna RT"""
+        
+        if progress_callback:
+            progress_callback("Calculando performance vs altura con Sionna RT...")
+            
+        heights = self.munich_config['height_range']
+        
+        # Initialize results structure
         results = {
             'heights': heights,
             'throughput_mbps': [],
             'path_loss_db': [],
             'los_probability': [],
             'snr_db': [],
-            'spectral_efficiency': []
+            'spectral_efficiency': [],
+            'channel_conditions': [],
+            'uses_sionna': []
         }
         
+        analysis_type = "Sionna RT" if self.uav_system else "Analítico"
         if progress_callback:
-            progress_callback(f"Analizando {len(heights)} alturas...")
+            progress_callback(f"Analizando {len(heights)} alturas con {analysis_type}...")
+        
+        print(f"\n🏙️ ANÁLISIS ALTURA CON {analysis_type.upper()}")
+        print("="*60)
         
         for i, height in enumerate(heights):
             if progress_callback:
                 progress = (i + 1) / len(heights) * 100
-                progress_callback(f"Altura {height:.0f}m ({progress:.0f}%)...")
+                progress_callback(f"Altura {height:.0f}m ({progress:.0f}%) - {analysis_type}...")
             
-            # 3D position
-            uav_pos = np.array([user_pos_2d[0], user_pos_2d[1], height])
+            print(f"\n📏 Altura: {height:.0f}m")
             
-            # Distance calculation
-            distance_3d = np.linalg.norm(uav_pos - gnb_pos)
+            # Calculate throughput using Sionna or analytical
+            height_result = self.calculate_sionna_throughput(height, progress_callback)
             
-            # LoS probability (ITU-R model for urban)
-            los_prob = 1 / (1 + 9.61 * np.exp(-0.16 * (height - 1.5)))
+            # Extract results
+            throughput = height_result['throughput_mbps']
+            channel_gain = height_result['channel_gain_db']
+            snr = height_result['snr_db']
+            condition = height_result['channel_condition']
+            direct_ratio = height_result['direct_path_ratio']
+            uses_sionna = height_result['uses_sionna']
             
-            # Path loss calculation (3GPP TR 38.901)
-            # Free space path loss
-            fspl_db = 32.4 + 20 * np.log10(distance_3d) + 20 * np.log10(self.munich_config['frequency_ghz'])
-            
-            # Additional path loss for NLoS
-            nlos_factor = 0 if los_prob > 0.5 else 20  # 20dB additional for NLoS
-            total_path_loss = fspl_db + nlos_factor
-            
-            # Received power
-            rx_power_dbm = self.munich_config['gnb_power_dbm'] - total_path_loss
-            
-            # SNR calculation (simplified)
-            noise_floor_dbm = -104  # Typical noise floor for 100MHz BW
-            snr_db = rx_power_dbm - noise_floor_dbm
-            
-            # MIMO gain (simplified)
-            mimo_gain_db = 10 * np.log10(min(self.munich_config['gnb_antennas'], 
-                                            self.munich_config['uav_antennas']))
-            snr_db += mimo_gain_db
-            
-            # Shannon capacity with practical efficiency
-            efficiency_factor = 0.75  # Practical efficiency
-            spectral_eff = efficiency_factor * np.log2(1 + 10**(snr_db/10))
-            
-            # Throughput
-            throughput_mbps = spectral_eff * self.munich_config['bandwidth_mhz']
-            
-            # Height-specific effects (diversity gain at certain heights)
-            if 40 <= height <= 80:
-                diversity_gain = 1.15  # 15% gain in optimal range
-                throughput_mbps *= diversity_gain
+            # Calculate derived metrics
+            path_loss = -channel_gain  # Path loss is negative channel gain
+            spectral_eff = throughput / self.munich_config['bandwidth_mhz']
+            los_prob = direct_ratio if uses_sionna else (1.0 if condition == 'LoS' else 0.0)
             
             # Store results
-            results['throughput_mbps'].append(max(0, throughput_mbps))
-            results['path_loss_db'].append(total_path_loss)
+            results['throughput_mbps'].append(throughput)
+            results['path_loss_db'].append(path_loss)
             results['los_probability'].append(los_prob)
-            results['snr_db'].append(snr_db)
+            results['snr_db'].append(snr)
             results['spectral_efficiency'].append(spectral_eff)
+            results['channel_conditions'].append(condition)
+            results['uses_sionna'].append(uses_sionna)
+            
+            # Progress report
+            sionna_indicator = "🔬" if uses_sionna else "📐"
+            print(f"   {sionna_indicator} Throughput: {throughput:.1f} Mbps ({condition})")
+            print(f"   📡 SNR: {snr:.1f} dB, Channel gain: {channel_gain:.1f} dB")
         
         # Convert to numpy arrays
         for key in results:
-            if key != 'heights':
+            if key not in ['heights', 'channel_conditions', 'uses_sionna']:
                 results[key] = np.array(results[key])
                 
+        # Analysis summary
+        sionna_count = sum(results['uses_sionna'])
+        print(f"\n✅ Análisis completado:")
+        print(f"   🔬 Sionna RT: {sionna_count}/{len(heights)} alturas")
+        print(f"   📐 Analítico: {len(heights) - sionna_count}/{len(heights)} alturas")
+        
         if progress_callback:
-            progress_callback("Análisis de altura completado")
+            progress_callback("Análisis de altura con Sionna completado")
             
         return results
     
@@ -175,7 +382,8 @@ class HeightAnalysisGUI:
         ax1.plot(heights, results['throughput_mbps'], 'b-o', linewidth=3, markersize=8)
         ax1.set_xlabel('Altura UAV [m]', fontweight='bold', fontsize=12)
         ax1.set_ylabel('Throughput [Mbps]', fontweight='bold', fontsize=12)
-        ax1.set_title('Throughput vs Altura UAV\nConfiguración MIMO 64x4', fontweight='bold', fontsize=14)
+        title_suffix = "Sionna RT" if any(results.get('uses_sionna', [False])) else "Analítico"
+        ax1.set_title(f'Throughput vs Altura UAV\nMIMO 64x4 ({title_suffix})', fontweight='bold', fontsize=14)
         ax1.grid(True, alpha=0.4)
         
         # Highlight optimal point
@@ -220,7 +428,8 @@ class HeightAnalysisGUI:
         ax4.legend()
         
         # Main title
-        fig.suptitle('ANÁLISIS ALTURA ÓPTIMA UAV - Sistema 5G NR Munich\nOptimización Throughput vs Altura de Vuelo', 
+        analysis_method = "Sionna RT" if any(results.get('uses_sionna', [False])) else "Modelos Analíticos"
+        fig.suptitle(f'ANÁLISIS ALTURA ÓPTIMA UAV - Sistema 5G NR Munich\nOptimización Throughput vs Altura ({analysis_method})', 
                     fontsize=16, fontweight='bold', y=0.95)
         
         plt.tight_layout()

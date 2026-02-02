@@ -25,6 +25,7 @@ Analiza el rendimiento de diferentes configuraciones de antenas MIMO masivo y es
 - **✅ Munich Scenario**: 6 edificios reales con gNB a [300,200,50]m
 - **✅ NLoS conditions**: Condiciones realistas no-line-of-sight detectadas
 - **✅ GPU acceleration**: Optimización TensorFlow con GeForce GTX 1660 SUPER
+- **✅ 3D Visualization**: Ray paths renderizados en escenario Munich urbano
 
 ### 🚁 **Definición de UAVs**
 - **UAV Principal**: Receptor MIMO en posición [100,100,50]m
@@ -55,14 +56,24 @@ Analiza el rendimiento de diferentes configuraciones de antenas MIMO masivo y es
 - **Ray paths**: 7 paths reales calculados por Sionna RT
 
 ### 📈 **Gráficas que Devuelve**
+**Tab "Gráficos y Resultados":**
 1. **MIMO Throughput**: Barras con valores Sionna reales por configuración
 2. **Beamforming vs SNR**: 5 curvas con throughput real 0-30dB
 3. **MIMO vs Beamforming**: Comparación directa de ganancias
 4. **Channel Analysis**: Condiciones NLoS, path count, system info
 5. **Performance Summary**: Métricas Sionna RT (paths, gains, efficiency)
-6. **3D Scenario**: Munich buildings + gNB + UAV + RF link
 
-**Resultado típico**: 37.2 Mbps (MIMO_16x8) + 75.8 Mbps (SVD beamforming) **usando BasicUAVSystem con Sionna SYS/RT auténtico**
+**Tab "Escena 3D":**
+- **✅ Escenario Munich 3D** con 6 edificios urbanos realistas
+- **✅ gNB MIMO masivo** en [300,200,50] con torre y array 16×4
+- **✅ UAV** en [100,100,50] con array 2×2 visible
+- **✅ 7 Ray Paths** calculados por Sionna RT (LoS + 6 reflexiones)
+- **✅ Channel overlays**: Información del canal (-37.9 dB gain, 16 streams)
+- **✅ Beamforming info**: Mejor estrategia SVD con 7.0 dB ganancia
+- **✅ Terreno urbano**: Plano base con perspectiva 3D optimizada
+- **✅ Path visualization**: Paths coloreados por intensidad de señal
+
+**Resultado típico**: 37.2 Mbps (MIMO_16x8) + 75.8 Mbps (SVD beamforming) **con visualización 3D completa del ray tracing Munich**
 
 ---
 

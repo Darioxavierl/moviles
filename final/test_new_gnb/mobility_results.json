@@ -1,0 +1,134 @@
+{
+  "simulation_type": "mobility_analysis",
+  "timestamp": "2026-02-01",
+  "system_config": {
+    "scenario": "Munich Urban Mobility 3D",
+    "simulation_time": "60s",
+    "time_resolution": "0.5s",
+    "flight_area": "\u00b1200m",
+    "height_range": "30-80m",
+    "patterns_analyzed": 6
+  },
+  "mobility_analysis": {
+    "simulation_time_s": 60,
+    "patterns_analyzed": 6,
+    "flight_area_m": 400,
+    "height_range": "30-80m"
+  },
+  "pattern_results": {
+    "circular": {
+      "name": "Trayectoria Circular",
+      "trajectory_stats": {
+        "total_distance_m": 942.3067464708439,
+        "avg_velocity_ms": 15.0,
+        "max_velocity_ms": 15.0
+      },
+      "performance_stats": {
+        "avg_throughput_mbps": 1238.5146105751262,
+        "min_throughput_mbps": 1174.129948308903,
+        "max_throughput_mbps": 1299.7948897582535,
+        "stability_score": 0.3708357681250039,
+        "total_data_mb": 9366.917222837088
+      }
+    },
+    "linear": {
+      "name": "Trayectoria Lineal",
+      "trajectory_stats": {
+        "total_distance_m": 1573.1092436974789,
+        "avg_velocity_ms": 14.836134453781513,
+        "max_velocity_ms": 15.0
+      },
+      "performance_stats": {
+        "avg_throughput_mbps": 1230.0967694447036,
+        "min_throughput_mbps": 1152.8363520631385,
+        "max_throughput_mbps": 1392.3302319864185,
+        "stability_score": 0.3242894288858354,
+        "total_data_mb": 9303.25287815322
+      }
+    },
+    "spiral": {
+      "name": "Trayectoria Espiral",
+      "trajectory_stats": {
+        "total_distance_m": 915.0544407185466,
+        "avg_velocity_ms": 11.646369896678069,
+        "max_velocity_ms": 15.0
+      },
+      "performance_stats": {
+        "avg_throughput_mbps": 1260.6671381255817,
+        "min_throughput_mbps": 1182.0484968816986,
+        "max_throughput_mbps": 1333.9953095054789,
+        "stability_score": 0.37595312373030726,
+        "total_data_mb": 9534.457347168265
+      }
+    },
+    "figure8": {
+      "name": "Trayectoria Figura-8",
+      "trajectory_stats": {
+        "total_distance_m": 731.4564090159528,
+        "avg_velocity_ms": 11.856252753228695,
+        "max_velocity_ms": 15.0
+      },
+      "performance_stats": {
+        "avg_throughput_mbps": 1256.343178469146,
+        "min_throughput_mbps": 1198.595107780549,
+        "max_throughput_mbps": 1357.238607080005,
+        "stability_score": 0.38234216572744206,
+        "total_data_mb": 9501.755131279257
+      }
+    },
+    "random_walk": {
+      "name": "Caminata Aleatoria",
+      "trajectory_stats": {
+        "total_distance_m": 1901.5958141220249,
+        "avg_velocity_ms": 13.579852641403033,
+        "max_velocity_ms": 15.0
+      },
+      "performance_stats": {
+        "avg_throughput_mbps": 1205.18509689531,
+        "min_throughput_mbps": 1167.7043214902626,
+        "max_throughput_mbps": 1324.25393591898,
+        "stability_score": 0.5545768682444171,
+        "total_data_mb": 9114.845270636797
+      }
+    },
+    "optimized": {
+      "name": "Trayectoria Optimizada",
+      "trajectory_stats": {
+        "total_distance_m": 456.110461903482,
+        "avg_velocity_ms": 7.677838363630985,
+        "max_velocity_ms": 11.02460682037344
+      },
+      "performance_stats": {
+        "avg_throughput_mbps": 1300.328415983928,
+        "min_throughput_mbps": 1250.6628321321828,
+        "max_throughput_mbps": 1355.3287299422968,
+        "stability_score": 0.5237028730202243,
+        "total_data_mb": 9834.416591475085
+      }
+    }
+  },
+  "comparative_analysis": {
+    "best_avg_throughput": {
+      "pattern": "Trayectoria Optimizada",
+      "value_mbps": 1300.328415983928
+    },
+    "most_stable": {
+      "pattern": "Caminata Aleatoria",
+      "stability_score": 0.5545768682444171
+    },
+    "highest_peak": {
+      "pattern": "Trayectoria Lineal",
+      "value_mbps": 1392.3302319864185
+    },
+    "most_efficient": {
+      "pattern": "Trayectoria Optimizada",
+      "efficiency_mb_per_m": 21.561479976655644
+    }
+  },
+  "summary": {
+    "recommended_pattern": "Trayectoria Optimizada",
+    "best_avg_throughput": "1300.3 Mbps",
+    "stability_range": "0.32 - 0.55",
+    "total_patterns_tested": 6
+  }
+}

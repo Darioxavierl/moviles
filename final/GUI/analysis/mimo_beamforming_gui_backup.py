@@ -328,38 +328,57 @@ class MIMOBeamformingGUI:
             fig = plt.figure(figsize=(16, 12))
             ax = fig.add_subplot(111, projection='3d')
             
-            # Munich buildings - definir con coordenadas realistas
-            munich_buildings = [
-                {"position": [50, 50], "size": [80, 80], "height": 25, "color": "#8B7355"},
-                {"position": [200, 100], "size": [60, 100], "height": 30, "color": "#696969"},  
-                {"position": [100, 250], "size": [70, 70], "height": 20, "color": "#A0522D"},
-                {"position": [350, 150], "size": [90, 60], "height": 35, "color": "#2F4F4F"},
-                {"position": [250, 300], "size": [80, 80], "height": 28, "color": "#8FBC8F"},
-                {"position": [280, 180], "size": [100, 100], "height": 45, "color": "#CD853F"},  # Edificio gNB
+            # Munich buildings (6 edificios del escenario)
+            buildings = [
+                {'pos': [50, 50, 0], 'size': [80, 80, 25], 'color': 'lightgray'},
+                {'pos': [200, 100, 0], 'size': [60, 100, 30], 'color': 'gray'},
+                {'pos': [100, 250, 0], 'size': [70, 70, 20], 'color': 'lightgray'},
+                {'pos': [350, 150, 0], 'size': [90, 60, 35], 'color': 'darkgray'},
+                {'pos': [250, 300, 0], 'size': [80, 80, 28], 'color': 'gray'},
+                {'pos': [300, 200, 0], 'size': [100, 100, 45], 'color': 'darkgray'},  # Edificio del gNB
             ]
             
-            # Dibujar edificios usando bar3d (más eficiente y claro)
-            for i, building in enumerate(munich_buildings):
-                x, y = building["position"]
-                dx, dy = building["size"]
-                height = building["height"]
-                color = building["color"]
+            # Draw buildings
+            for building in buildings:
+                x, y, z = building['pos']
+                dx, dy, dz = building['size']
                 
-                # Destacar edificio del gNB
-                if i == 5:  # Último edificio = edificio del gNB
-                    color = '#FF6B6B'
-                    alpha = 0.4  # Más transparente para el edificio gNB
-                else:
-                    alpha = 0.3  # Mucho más transparente para otros edificios
+                # Create building using simple box plotting
+                # Bottom face
+                xx = [[x, x+dx, x+dx, x], [x, x+dx, x+dx, x]]
+                yy = [[y, y, y+dy, y+dy], [y, y, y+dy, y+dy]]
+                zz = [[z, z, z, z], [z, z, z, z]]
+                ax.plot_surface(np.array(xx), np.array(yy), np.array(zz), 
+                               color=building['color'], alpha=0.7)
                 
-                # Dibujar edificio
-                ax.bar3d(x-dx/2, y-dy/2, 0, dx, dy, height, 
-                         color=color, alpha=alpha, edgecolor='gray', linewidth=0.3)
+                # Top face
+                zz_top = [[z+dz, z+dz, z+dz, z+dz], [z+dz, z+dz, z+dz, z+dz]]
+                ax.plot_surface(np.array(xx), np.array(yy), np.array(zz_top), 
+                               color=building['color'], alpha=0.7)
                 
-                # Etiqueta opcional para edificio principal
-                if i == 5:
-                    ax.text(x, y, height+5, '📡 gNB\nBuilding', ha='center', va='bottom',
-                           fontsize=8, fontweight='bold', color='darkred')
+                # Side faces
+                # Front face
+                xx_front = [[x, x+dx, x+dx, x], [x, x+dx, x+dx, x]]
+                yy_front = [[y, y, y, y], [y, y, y, y]]
+                zz_front = [[z, z, z+dz, z+dz], [z, z, z+dz, z+dz]]
+                ax.plot_surface(np.array(xx_front), np.array(yy_front), np.array(zz_front), 
+                               color=building['color'], alpha=0.7)
+                
+                # Back face
+                yy_back = [[y+dy, y+dy, y+dy, y+dy], [y+dy, y+dy, y+dy, y+dy]]
+                ax.plot_surface(np.array(xx_front), np.array(yy_back), np.array(zz_front), 
+                               color=building['color'], alpha=0.7)
+                
+                # Left face
+                xx_left = [[x, x, x, x], [x, x, x, x]]
+                yy_left = [[y, y+dy, y+dy, y], [y, y+dy, y+dy, y]]
+                ax.plot_surface(np.array(xx_left), np.array(yy_left), np.array(zz_front), 
+                               color=building['color'], alpha=0.7)
+                
+                # Right face
+                xx_right = [[x+dx, x+dx, x+dx, x+dx], [x+dx, x+dx, x+dx, x+dx]]
+                ax.plot_surface(np.array(xx_right), np.array(yy_left), np.array(zz_front), 
+                               color=building['color'], alpha=0.7)
             
             # gNB position (sobre el edificio más alto)
             gnb_pos = self.munich_config['gnb_position']
@@ -381,10 +400,10 @@ class MIMOBeamformingGUI:
             paths_colors = ['red', 'orange', 'yellow', 'green', 'cyan', 'blue', 'purple']
             path_intensities = [1.0, 0.8, 0.6, 0.5, 0.4, 0.3, 0.2]  # Intensidad decreciente
             
-            # LoS path (directo) - más prominente
+            # LoS path (directo)
             ax.plot([gnb_pos[0], uav_pos[0]], [gnb_pos[1], uav_pos[1]], 
-                   [gnb_pos[2], uav_pos[2]], 'r-', linewidth=4, 
-                   alpha=1.0, label='LoS Path (Direct)', zorder=10)
+                   [gnb_pos[2], uav_pos[2]], 'r-', linewidth=3, 
+                   alpha=0.8, label='LoS Path')
             
             # Reflected paths (6 reflexiones)
             reflection_points = [
@@ -398,19 +417,19 @@ class MIMOBeamformingGUI:
             
             for i, refl_point in enumerate(reflection_points):
                 color = paths_colors[(i+1) % len(paths_colors)]
-                alpha = max(0.8, path_intensities[(i+1) % len(path_intensities)])  # Más opaco para rayos
+                alpha = path_intensities[(i+1) % len(path_intensities)]
                 
-                # gNB to reflection point (rayos más gruesos y visibles)
+                # gNB to reflection point
                 ax.plot([gnb_pos[0], refl_point[0]], [gnb_pos[1], refl_point[1]], 
-                       [gnb_pos[2], refl_point[2]], color=color, linewidth=3, alpha=alpha)
+                       [gnb_pos[2], refl_point[2]], color=color, linewidth=2, alpha=alpha)
                 
-                # Reflection point to UAV (rayos más gruesos)
+                # Reflection point to UAV
                 ax.plot([refl_point[0], uav_pos[0]], [refl_point[1], uav_pos[1]], 
-                       [refl_point[2], uav_pos[2]], color=color, linewidth=3, alpha=alpha)
+                       [refl_point[2], uav_pos[2]], color=color, linewidth=2, alpha=alpha)
                 
-                # Reflection point marker (más grande y visible)
+                # Reflection point marker
                 ax.scatter(refl_point[0], refl_point[1], refl_point[2], 
-                          c=color, s=60, alpha=alpha, edgecolors='white', linewidth=1)
+                          c=color, s=30, alpha=alpha)
             
             # Channel information overlay
             if mimo_results:
@@ -543,65 +562,39 @@ class MIMOBeamformingGUI:
         # 4. 3D Munich Scenario Visualization (Bottom Left)
         ax4 = plt.subplot(2, 3, 4, projection='3d')
         
-        # Munich buildings - definir según Sionna dataset
-        munich_buildings = [
-            {"position": [100, 100, 0], "size": [50, 50, 20], "color": "#8B4513"},
-            {"position": [200, 150, 0], "size": [40, 40, 35], "color": "#696969"},  
-            {"position": [280, 180, 0], "size": [60, 60, 45], "color": "#CD853F"},  # gNB building
-            {"position": [150, 300, 0], "size": [45, 45, 30], "color": "#2F4F4F"},
-            {"position": [350, 350, 0], "size": [40, 40, 25], "color": "#8FBC8F"},
-            {"position": [250, 50, 0], "size": [35, 35, 40], "color": "#A0522D"}
+        # Munich buildings
+        buildings = [
+            [100, 100, 20], [200, 150, 35], [300, 200, 45],  
+            [150, 300, 30], [350, 350, 25], [250, 50, 40]
         ]
+        building_colors = ['#8B4513', '#696969', '#FF6B6B', '#2F4F4F', '#8FBC8F', '#CD853F']
         
-        # Dibujar edificios
-        for i, building in enumerate(munich_buildings):
-            x, y, z = building["position"]
-            dx, dy, dz = building["size"]
-            color = building["color"]
-            
-            # Destacar edificio del gNB
-            if i == 2:  # Edificio donde está el gNB
-                color = '#FF4444'
-                alpha = 0.8
-            else:
-                alpha = 0.6
-                
-            ax4.bar3d(x-dx/2, y-dy/2, z, dx, dy, dz, 
-                     alpha=alpha, color=color, edgecolor='black', linewidth=0.5)
+        for i, (x, y, h) in enumerate(buildings):
+            building_size = 35
+            color = '#FF6B6B' if i == 2 else building_colors[i]  # Highlight gNB building
+            ax4.bar3d(x-building_size/2, y-building_size/2, 0, building_size, building_size, h, 
+                     alpha=0.7, color=color, edgecolor='black')
         
-        # gNB position (encima del edificio)
+        # gNB position
         gnb_pos = self.munich_config['gnb_position']
         ax4.scatter([gnb_pos[0]], [gnb_pos[1]], [gnb_pos[2]], 
-                   c='red', s=400, marker='^', label='gNB Base Station', 
-                   edgecolors='darkred', linewidth=2)
+                   c='red', s=300, marker='^', label='gNB (Sionna)', edgecolors='darkred')
         
-        # UAV position
+        # UAV position 
         uav_pos = self.munich_config['test_position']
         ax4.scatter([uav_pos[0]], [uav_pos[1]], [uav_pos[2]], 
-                   c='blue', s=300, marker='h', label='UAV Test Position', 
-                   edgecolors='darkblue', linewidth=2)
+                   c='blue', s=200, marker='o', label='UAV Test Position', edgecolors='darkblue')
         
-        # Línea de conexión RF
+        # Link line
         ax4.plot([gnb_pos[0], uav_pos[0]], [gnb_pos[1], uav_pos[1]], [gnb_pos[2], uav_pos[2]], 
-                'g--', linewidth=3, alpha=0.8, label='RF Communication Link')
+                'g--', linewidth=3, alpha=0.8, label='RF Link')
         
-        # Configurar ejes y vista
-        ax4.set_xlabel('X (metros)', fontweight='bold')
-        ax4.set_ylabel('Y (metros)', fontweight='bold')
-        ax4.set_zlabel('Z (metros)', fontweight='bold')
-        ax4.set_title('🏙️ Munich Urban Scenario\n📡 Sionna Ray Tracing', fontweight='bold', fontsize=12)
-        
-        # Configurar límites para mejor visualización
-        ax4.set_xlim(0, 400)
-        ax4.set_ylim(0, 400)
-        ax4.set_zlim(0, 100)
-        
-        # Vista óptima
-        ax4.view_init(elev=25, azim=45)
-        ax4.legend(loc='upper right', fontsize=9)
-        
-        # Grid sutil
-        ax4.grid(True, alpha=0.2)
+        ax4.set_xlabel('X (m)')
+        ax4.set_ylabel('Y (m)')
+        ax4.set_zlabel('Z (m)')
+        ax4.set_title('Munich 3D Scenario\n(Sionna Ray Tracing)', fontweight='bold')
+        ax4.legend()
+        ax4.view_init(elev=20, azim=45)
         
         # 5. Channel Gain Analysis (Bottom Middle)
         ax5 = plt.subplot(2, 3, 5)
@@ -845,16 +838,10 @@ SIONNA RT ANALYSIS SUMMARY
         return summary
 
 
-def run_mimo_analysis_gui(params=None, output_dir="outputs"):
+def run_mimo_analysis_gui(output_dir="outputs"):
     """Función principal para ejecutar análisis MIMO desde GUI"""
     
     print("🚀 INICIANDO ANÁLISIS MIMO CON SIONNA RT...")
-    
-    # Handle both dict parameters and direct output_dir
-    if params and isinstance(params, dict):
-        output_dir = params.get('output_dir', output_dir)
-    elif isinstance(params, str):
-        output_dir = params
     
     try:
         # Initialize analysis
@@ -925,12 +912,13 @@ def run_mimo_analysis_gui(params=None, output_dir="outputs"):
         if os.path.exists(plot_path):
             plot_files.append(plot_path)
         
-        # Note: scene_3d_path should NOT be added to plot_files - it goes to scene_3d field only
+        if scene_3d_path and os.path.exists(scene_3d_path):
+            plot_files.append(scene_3d_path)
         
         # Return results for GUI
         result = {
             'type': 'MIMO + Beamforming',  # Add type for GUI compatibility
-            'plots': plot_files,  # Only regular plots here
+            'plots': plot_files,
             'scene_3d': [scene_3d_path] if scene_3d_path and os.path.exists(scene_3d_path) else [],
             'data': json_data,
             'summary': summary,
@@ -958,7 +946,424 @@ def run_mimo_analysis_gui(params=None, output_dir="outputs"):
             'error': str(e)
         }
 
+
 if __name__ == "__main__":
     # Test standalone
-    result = run_mimo_analysis_gui("outputs")
+    result = run_mimo_analysis_gui("test_mimo_sionna")
+    print(f"✅ Test completado: {result['summary']}")
+    
+    def calculate_beamforming_gains(self, progress_callback=None):
+        """Calcular ganancias por beamforming"""
+        
+        if progress_callback:
+            progress_callback("Analizando estrategias beamforming...")
+        
+        beamforming_results = {}
+        base_snr_db = self.system_config['snr_base_db']
+        
+        for strategy in self.beamforming_strategies:
+            # SNR con beamforming
+            snr_with_bf = base_snr_db + strategy['gain_db']
+            snr_linear = 10 ** (snr_with_bf / 10)
+            
+            # Calcular para MIMO 8x4 (configuración práctica)
+            nt, nr = 8, 4
+            array_gain = np.sqrt(nt * nr)
+            effective_snr = snr_linear * array_gain
+            streams = min(nt, nr)
+            
+            capacity = streams * np.log2(1 + effective_snr / streams)
+            throughput = capacity * self.system_config['bandwidth_mhz']
+            
+            beamforming_results[strategy['name']] = {
+                'gain_db': strategy['gain_db'],
+                'snr_total_db': snr_with_bf,
+                'throughput_mbps': throughput,
+                'improvement_factor': throughput / (100)  # vs 100 Mbps baseline
+            }
+        
+        return beamforming_results
+    
+    def generate_mimo_plots(self, mimo_results, beamforming_results):
+        """Generar plots de resultados MIMO"""
+        
+        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(16, 12))
+        
+        # 1. Throughput vs SNR para diferentes MIMO
+        for config_name, data in mimo_results.items():
+            ax1.plot(data['snr_db'], data['throughput_mbps'], 'o-', 
+                    linewidth=2, label=config_name)
+        
+        ax1.set_xlabel('SNR (dB)')
+        ax1.set_ylabel('Throughput (Mbps)')
+        ax1.set_title('Throughput vs SNR - Configuraciones MIMO')
+        ax1.grid(True, alpha=0.3)
+        ax1.legend()
+        ax1.set_xlim(-10, 30)
+        
+        # 2. Espectral Efficiency
+        for config_name, data in mimo_results.items():
+            ax2.plot(data['snr_db'], data['spectral_efficiency'], 's-', 
+                    linewidth=2, label=config_name)
+        
+        ax2.set_xlabel('SNR (dB)')
+        ax2.set_ylabel('Spectral Efficiency (bits/s/Hz)')
+        ax2.set_title('Eficiencia Espectral - MIMO')
+        ax2.grid(True, alpha=0.3)
+        ax2.legend()
+        
+        # 3. Beamforming gains
+        strategies = list(beamforming_results.keys())
+        gains = [beamforming_results[s]['gain_db'] for s in strategies]
+        throughputs = [beamforming_results[s]['throughput_mbps'] for s in strategies]
+        
+        bars = ax3.bar(strategies, gains, color='purple', alpha=0.7)
+        ax3.set_ylabel('Beamforming Gain (dB)')
+        ax3.set_title('Ganancia por Estrategia de Beamforming')
+        ax3.grid(True, alpha=0.3, axis='y')
+        plt.setp(ax3.get_xticklabels(), rotation=45, ha='right')
+        
+        # Add value labels
+        for bar, gain in zip(bars, gains):
+            height = bar.get_height()
+            ax3.text(bar.get_x() + bar.get_width()/2., height + 0.1,
+                    f'{gain}dB', ha='center', va='bottom')
+        
+        # 4. Throughput improvement by beamforming
+        improvements = [beamforming_results[s]['improvement_factor'] for s in strategies]
+        ax4.bar(strategies, improvements, color='green', alpha=0.7)
+        ax4.set_ylabel('Improvement Factor (x)')
+        ax4.set_title('Mejora Throughput por Beamforming')
+        ax4.grid(True, alpha=0.3, axis='y')
+        plt.setp(ax4.get_xticklabels(), rotation=45, ha='right')
+        
+        plt.tight_layout()
+        
+        # Guardar plot
+        plot_path = os.path.join(self.output_dir, "mimo_beamforming_analysis.png")
+        plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        return plot_path
+    
+    def generate_3d_scene(self, mimo_results, progress_callback=None):
+        """Generar escena 3D mejorada del mapa Munich con MIMO"""
+        
+        if progress_callback:
+            progress_callback("Generando mapa 3D Munich con UAVs y gNB...")
+        
+        fig = plt.figure(figsize=(18, 14))
+        ax = fig.add_subplot(111, projection='3d')
+        
+        # Configuración Munich mejorada
+        area = 500
+        munich_config = {
+            'building_positions': [
+                [100, 100, 20], [200, 150, 35], [300, 200, 45],
+                [150, 300, 30], [350, 350, 25], [250, 50, 40]
+            ],
+            'gnb_position': [300, 200, 50],  # gNB sobre edificio más alto
+            'uav_positions': {
+                'user_uav': [200, 200, 50],
+                'relay_uav': [125, 140, 75],  
+                'mesh_uav_1': [150, 50, 55],
+                'mesh_uav_2': [50, 150, 55]
+            }
+        }
+        
+        # ===== TERRENO URBANO MUNICH =====
+        x_ground = np.linspace(0, area, 50)
+        y_ground = np.linspace(0, area, 50)
+        X_ground, Y_ground = np.meshgrid(x_ground, y_ground)
+        Z_ground = 2 * np.sin(X_ground/100) * np.cos(Y_ground/100) + 1
+        ax.plot_surface(X_ground, Y_ground, Z_ground, alpha=0.3, color='lightgreen', 
+                       linewidth=0, antialiased=True)
+        
+        # ===== EDIFICIOS URBANOS MUNICH =====
+        building_colors = ['#8B4513', '#696969', '#708090', '#2F4F4F', '#8FBC8F', '#CD853F']
+        building_names = ['Edificio A', 'Edificio B', 'Edificio C', 'Edificio D', 'Edificio E', 'Edificio F']
+        
+        for i, (x, y, h) in enumerate(munich_config['building_positions']):
+            building_size = 35
+            
+            # Edificio sólido con color distintivo
+            ax.bar3d(x-building_size/2, y-building_size/2, 0, building_size, building_size, h, 
+                    alpha=0.7, color=building_colors[i], edgecolor='black', linewidth=1)
+            
+            # Etiqueta del edificio
+            ax.text(x, y, h+5, f'{building_names[i]}\n{h}m', fontsize=8, ha='center', va='bottom',
+                   bbox=dict(boxstyle="round,pad=0.2", facecolor='white', alpha=0.8))
+        
+        # ===== ESTACIÓN BASE gNB CON MASSIVE MIMO =====
+        gnb_x, gnb_y, gnb_z = munich_config['gnb_position']
+        
+        # Torre gNB con 256 antenas
+        ax.scatter([gnb_x], [gnb_y], [gnb_z], c='red', s=500, marker='^', 
+                  label='gNB Massive MIMO (256 ant)', alpha=1.0, edgecolors='darkred', linewidth=3)
+        
+        # Torre de comunicación (mástil)
+        ax.plot([gnb_x, gnb_x], [gnb_y, gnb_y], [0, gnb_z], 'darkred', linewidth=8, alpha=0.9)
+        
+        # Array de antenas MIMO (representación visual)
+        antenna_grid = []
+        for i in range(-2, 3):  # 5x5 grid visual
+            for j in range(-2, 3):
+                ant_x = gnb_x + i * 2
+                ant_y = gnb_y + j * 2
+                antenna_grid.append([ant_x, ant_y, gnb_z])
+        
+        for ant_x, ant_y, ant_z in antenna_grid:
+            ax.scatter([ant_x], [ant_y], [ant_z], c='darkred', s=20, marker='s', alpha=0.6)
+        
+        # ===== UAVs CON CARACTERÍSTICAS MIMO =====
+        uav_configs = {
+            'user_uav': {'color': 'blue', 'marker': 'o', 'label': 'UAV Usuario (4 ant)', 'size': 200},
+            'relay_uav': {'color': 'green', 'marker': 's', 'label': 'UAV Relay (8 ant)', 'size': 250}, 
+            'mesh_uav_1': {'color': 'orange', 'marker': 'D', 'label': 'UAV Mesh 1 (2 ant)', 'size': 180},
+            'mesh_uav_2': {'color': 'purple', 'marker': 'v', 'label': 'UAV Mesh 2 (2 ant)', 'size': 180}
+        }
+        
+        for uav_type, (x, y, z) in munich_config['uav_positions'].items():
+            config = uav_configs[uav_type]
+            
+            # UAV principal
+            ax.scatter([x], [y], [z], c=config['color'], s=config['size'], 
+                      marker=config['marker'], label=config['label'], alpha=0.9, 
+                      edgecolors='black', linewidth=2)
+            
+            # Antenas UAV (mini array)
+            if 'relay' in uav_type:  # UAV relay con más antenas
+                ant_positions = [(x+3, y, z), (x-3, y, z), (x, y+3, z), (x, y-3, z)]
+                for ax_pos, ay_pos, az_pos in ant_positions:
+                    ax.scatter([ax_pos], [ay_pos], [az_pos], c=config['color'], s=15, marker='s', alpha=0.7)
+            
+            # Línea vertical indicando altura
+            ax.plot([x, x], [y, y], [0, z], '--', color=config['color'], alpha=0.5, linewidth=2)
+            
+            # Etiqueta de posición y antenas
+            ax.text(x, y, z+8, f'{config["label"]}\n[{x},{y},{z}m]', 
+                   fontsize=8, ha='center', va='bottom',
+                   bbox=dict(boxstyle="round,pad=0.2", facecolor=config['color'], alpha=0.7, edgecolor='black'))
+        
+        # ===== ENLACES MIMO + BEAMFORMING =====
+        # Beamforming patterns desde gNB
+        for uav_type, (x, y, z) in munich_config['uav_positions'].items():
+            config = uav_configs[uav_type]
+            
+            # Haz MIMO direccional (múltiples rayos)
+            for offset in [-5, 0, 5]:  # 3 rayos por haz
+                beam_x = np.linspace(gnb_x + offset, x + offset, 15)
+                beam_y = np.linspace(gnb_y + offset, y + offset, 15)  
+                beam_z = np.linspace(gnb_z, z, 15)
+                
+                ax.plot(beam_x, beam_y, beam_z, color=config['color'], 
+                       linewidth=2, alpha=0.6, linestyle='-')
+            
+            # Enlace principal más grueso
+            ax.plot([gnb_x, x], [gnb_y, y], [gnb_z, z], color=config['color'], 
+                   linewidth=5, alpha=0.8)
+        
+        # Enlaces inter-UAV (mesh y relay)
+        user_pos = munich_config['uav_positions']['user_uav']
+        relay_pos = munich_config['uav_positions']['relay_uav']
+        
+        # Relay link
+        ax.plot([relay_pos[0], user_pos[0]], [relay_pos[1], user_pos[1]], 
+               [relay_pos[2], user_pos[2]], 'g-', linewidth=4, alpha=0.8, label='Enlace Relay')
+        
+        # ===== CONFIGURACIÓN DE LA VISTA =====
+        ax.set_xlabel('Coordenada X (metros)', fontsize=12, fontweight='bold')
+        ax.set_ylabel('Coordenada Y (metros)', fontsize=12, fontweight='bold')
+        ax.set_zlabel('Altura Z (metros)', fontsize=12, fontweight='bold')
+        ax.set_title('MAPA 3D MUNICH - MIMO Masivo + Beamforming\nSistema UAV 5G NR con 256 Antenas gNB', 
+                    fontsize=16, fontweight='bold', pad=20)
+        
+        # Límites optimizados
+        ax.set_xlim(-50, area+50)
+        ax.set_ylim(-50, area+50)
+        ax.set_zlim(0, 120)
+        
+        # Leyenda mejorada
+        ax.legend(loc='upper left', bbox_to_anchor=(0.02, 0.98), fontsize=9, 
+                 framealpha=0.9, fancybox=True, shadow=True)
+        
+        # Grid 3D
+        ax.grid(True, alpha=0.4)
+        ax.xaxis.pane.fill = False
+        ax.yaxis.pane.fill = False
+        ax.zaxis.pane.fill = False
+        
+        # Mejor ángulo de vista
+        ax.view_init(elev=25, azim=45)
+        
+        plt.tight_layout()
+        
+        # Guardar escena 3D
+        scene_path = os.path.join(self.output_dir, "munich_3d_mimo_scene.png")
+        plt.savefig(scene_path, dpi=150, bbox_inches='tight')
+        plt.close()
+        
+        return scene_path
+    
+    def save_detailed_json_report(self, output_folder: str, results: dict):
+        """
+        Save complete analysis results to JSON
+        """
+        report_path = f"{output_folder}/mimo_beamforming_detailed_report.json"
+        
+        # Prepare serializable report
+        report = {
+            "timestamp": datetime.now().isoformat(),
+            "analysis_type": "MIMO Beamforming with Sionna RT",
+            "scenario": "Munich 3D Urban",
+            "frequency_ghz": self.munich_config['frequency_ghz'],
+            "bandwidth_mhz": self.munich_config['bandwidth_mhz'],
+            "uses_sionna": True,
+            "total_configurations": len(results),
+            "configurations": results
+        }
+        
+        # Convert numpy arrays to lists for JSON serialization
+        def convert_for_json(obj):
+            if isinstance(obj, np.ndarray):
+                return obj.tolist()
+            elif isinstance(obj, dict):
+                return {k: convert_for_json(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_for_json(item) for item in obj]
+            elif isinstance(obj, (np.integer, np.floating)):
+                return float(obj)
+            return obj
+        
+        report = convert_for_json(report)
+        
+        with open(report_path, 'w', encoding='utf-8') as f:
+            json.dump(report, f, indent=2, ensure_ascii=False)
+        
+        print(f"📊 JSON report saved: {report_path}")
+        return report_path
+    
+    def run_complete_analysis(self, progress_callback=None):
+        """
+        Run the complete MIMO analysis with Sionna RT
+        """
+        if progress_callback:
+            progress_callback("Initializing MIMO Analysis...", 0)
+        
+        try:
+            print("🔬 Starting complete MIMO analysis with Sionna RT...")
+            
+            # Run MIMO analysis
+            if progress_callback:
+                progress_callback("Analyzing MIMO configurations...", 20)
+            mimo_results = self.analyze_mimo_configurations_with_sionna(progress_callback)
+            
+            # Run beamforming analysis  
+            if progress_callback:
+                progress_callback("Analyzing beamforming strategies...", 60)
+            beamforming_results = self.analyze_beamforming_strategies_with_sionna(progress_callback)
+            
+            # Generate plots
+            if progress_callback:
+                progress_callback("Generating plots...", 85)
+            self.generate_mimo_sionna_plots(mimo_results, beamforming_results)
+            
+            # Save results
+            if progress_callback:
+                progress_callback("Saving results...", 95)
+            self.save_results_json(mimo_results, beamforming_results)
+            
+            if progress_callback:
+                progress_callback("Analysis completed!", 100)
+            
+            print(f"🎯 Complete MIMO analysis finished")
+            
+            # Combine results
+            combined_results = {
+                'mimo_results': mimo_results,
+                'beamforming_results': beamforming_results,
+                'uses_sionna': True
+            }
+            
+            return combined_results
+            
+        except Exception as e:
+            print(f"❌ Complete analysis error: {e}")
+            return {}
+
+
+def run_mimo_analysis_gui(output_dir="outputs"):
+        ax.yaxis.pane.fill = False
+        ax.zaxis.pane.fill = False
+        
+        # Ángulo de vista óptimo
+        ax.view_init(elev=30, azim=45)
+        
+        # Color de fondo
+        fig.patch.set_facecolor('white')
+        
+        plt.tight_layout()
+        
+        if progress_callback:
+            progress_callback("Guardando mapa 3D Munich mejorado...")
+            
+        # Guardar escena 3D mejorada
+        return scene_path
+
+
+def run_mimo_analysis_gui(output_dir="outputs"):
+    """Función principal para ejecutar análisis MIMO desde GUI"""
+    
+    print("🚀 INICIANDO ANÁLISIS MIMO CON SIONNA RT...")
+    
+    try:
+        # Initialize analysis
+        analysis = MIMOBeamformingGUI(output_dir)
+        
+        # Run MIMO analysis
+        print("🔄 Ejecutando análisis configuraciones MIMO...")
+        mimo_results = analysis.analyze_mimo_configurations_with_sionna()
+        
+        # Run beamforming analysis  
+        print("🔄 Ejecutando análisis beamforming...")
+        beamforming_results = analysis.analyze_beamforming_strategies_with_sionna()
+        
+        # Generate plots
+        print("🔄 Generando visualizaciones...")
+        fig = analysis.generate_mimo_sionna_plots(mimo_results, beamforming_results)
+        
+        # Save results
+        print("🔄 Guardando resultados...")
+        json_data = analysis.save_results_json(mimo_results, beamforming_results)
+        
+        # Generate summary
+        summary = analysis.generate_summary_report(mimo_results, beamforming_results)
+        
+        # Return results for GUI
+        return {
+            'plots': [os.path.join(output_dir, "mimo_beamforming_sionna_analysis.png")],
+            'data': json_data,
+            'summary': summary,
+            'mimo_results': mimo_results,
+            'beamforming_results': beamforming_results,
+            'uses_sionna': True,
+            'scenario': 'Munich 3D Urban with Sionna RT'
+        }
+        
+    except Exception as e:
+        print(f"❌ Error en análisis MIMO: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        return {
+            'plots': [],
+            'data': {},
+            'summary': f"Error en análisis MIMO: {str(e)[:100]}",
+            'error': str(e)
+        }
+
+
+if __name__ == "__main__":
+    # Test standalone
+    result = run_mimo_analysis_gui("test_mimo_sionna")
     print(f"✅ Test completado: {result.get('summary', 'Error')}")

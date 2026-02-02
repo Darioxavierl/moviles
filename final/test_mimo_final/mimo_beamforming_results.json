@@ -1,0 +1,368 @@
+{
+  "simulation_type": "mimo_beamforming_sionna",
+  "timestamp": "2026-02-01",
+  "system_config": {
+    "scenario": "Munich 3D Urban with Sionna RT",
+    "frequency": "3.5 GHz",
+    "bandwidth": "100 MHz",
+    "gnb_config": "Variable antennas @ [300, 200, 50]",
+    "uav_config": "Variable antennas",
+    "ray_tracing": "Depth 5"
+  },
+  "munich_config": {
+    "test_position": [
+      100,
+      100,
+      50
+    ],
+    "gnb_position": [
+      300,
+      200,
+      50
+    ],
+    "frequency_ghz": 3.5,
+    "bandwidth_mhz": 100,
+    "uses_sionna_rt": true
+  },
+  "mimo_analysis": {
+    "SISO_1x1": {
+      "throughput_mbps": 0.0,
+      "spectral_efficiency": 0.0,
+      "channel_gain_db": -100.0,
+      "mimo_gain_db": 0.0,
+      "spatial_streams": 1,
+      "effective_snr_db": -50.0,
+      "uses_sionna": false,
+      "ray_tracing_paths": "N/A",
+      "config": {
+        "gnb": {
+          "antennas": 1,
+          "rows": 1,
+          "cols": 1
+        },
+        "uav": {
+          "antennas": 1,
+          "rows": 1,
+          "cols": 1
+        },
+        "description": "SISO baseline"
+      }
+    },
+    "MIMO_2x2": {
+      "throughput_mbps": 0.0,
+      "spectral_efficiency": 0.0,
+      "channel_gain_db": -100.0,
+      "mimo_gain_db": 0.0,
+      "spatial_streams": 1,
+      "effective_snr_db": -50.0,
+      "uses_sionna": false,
+      "ray_tracing_paths": "N/A",
+      "config": {
+        "gnb": {
+          "antennas": 4,
+          "rows": 2,
+          "cols": 2
+        },
+        "uav": {
+          "antennas": 4,
+          "rows": 2,
+          "cols": 2
+        },
+        "description": "Small MIMO 2x2"
+      }
+    },
+    "MIMO_4x4": {
+      "throughput_mbps": 0.0,
+      "spectral_efficiency": 0.0,
+      "channel_gain_db": -100.0,
+      "mimo_gain_db": 0.0,
+      "spatial_streams": 1,
+      "effective_snr_db": -50.0,
+      "uses_sionna": false,
+      "ray_tracing_paths": "N/A",
+      "config": {
+        "gnb": {
+          "antennas": 16,
+          "rows": 4,
+          "cols": 4
+        },
+        "uav": {
+          "antennas": 4,
+          "rows": 2,
+          "cols": 2
+        },
+        "description": "Medium MIMO 4x4\u21922x2"
+      }
+    },
+    "MIMO_8x4": {
+      "throughput_mbps": 0.0,
+      "spectral_efficiency": 0.0,
+      "channel_gain_db": -100.0,
+      "mimo_gain_db": 0.0,
+      "spatial_streams": 1,
+      "effective_snr_db": -50.0,
+      "uses_sionna": false,
+      "ray_tracing_paths": "N/A",
+      "config": {
+        "gnb": {
+          "antennas": 64,
+          "rows": 8,
+          "cols": 8
+        },
+        "uav": {
+          "antennas": 4,
+          "rows": 2,
+          "cols": 2
+        },
+        "description": "Large MIMO 8x8\u21922x2 (Current)"
+      }
+    },
+    "MIMO_16x8": {
+      "throughput_mbps": 0.0,
+      "spectral_efficiency": 0.0,
+      "channel_gain_db": -100.0,
+      "mimo_gain_db": 0.0,
+      "spatial_streams": 1,
+      "effective_snr_db": -50.0,
+      "uses_sionna": false,
+      "ray_tracing_paths": "N/A",
+      "config": {
+        "gnb": {
+          "antennas": 256,
+          "rows": 16,
+          "cols": 16
+        },
+        "uav": {
+          "antennas": 16,
+          "rows": 4,
+          "cols": 4
+        },
+        "description": "Massive MIMO 16x16\u21924x4"
+      }
+    }
+  },
+  "beamforming_analysis": {
+    "omnidirectional": {
+      "avg_throughput_mbps": 0.0,
+      "peak_throughput_mbps": 0.0,
+      "gain_db": 0.0,
+      "description": "Sin beamforming",
+      "uses_sionna": true,
+      "snr_range": [
+        0.0,
+        2.0,
+        4.0,
+        6.0,
+        8.0,
+        10.0,
+        12.0,
+        14.0,
+        16.0,
+        18.0,
+        20.0,
+        22.0,
+        24.0,
+        26.0,
+        28.0,
+        30.0
+      ],
+      "throughput_vs_snr": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "mrt": {
+      "avg_throughput_mbps": 0.0,
+      "peak_throughput_mbps": 0.0,
+      "gain_db": 3.0,
+      "description": "Maximum Ratio Transmission",
+      "uses_sionna": true,
+      "snr_range": [
+        0.0,
+        2.0,
+        4.0,
+        6.0,
+        8.0,
+        10.0,
+        12.0,
+        14.0,
+        16.0,
+        18.0,
+        20.0,
+        22.0,
+        24.0,
+        26.0,
+        28.0,
+        30.0
+      ],
+      "throughput_vs_snr": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "zf": {
+      "avg_throughput_mbps": 0.0,
+      "peak_throughput_mbps": 0.0,
+      "gain_db": 5.0,
+      "description": "Zero Forcing",
+      "uses_sionna": true,
+      "snr_range": [
+        0.0,
+        2.0,
+        4.0,
+        6.0,
+        8.0,
+        10.0,
+        12.0,
+        14.0,
+        16.0,
+        18.0,
+        20.0,
+        22.0,
+        24.0,
+        26.0,
+        28.0,
+        30.0
+      ],
+      "throughput_vs_snr": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "mmse": {
+      "avg_throughput_mbps": 0.0,
+      "peak_throughput_mbps": 0.0,
+      "gain_db": 4.0,
+      "description": "MMSE Beamforming",
+      "uses_sionna": true,
+      "snr_range": [
+        0.0,
+        2.0,
+        4.0,
+        6.0,
+        8.0,
+        10.0,
+        12.0,
+        14.0,
+        16.0,
+        18.0,
+        20.0,
+        22.0,
+        24.0,
+        26.0,
+        28.0,
+        30.0
+      ],
+      "throughput_vs_snr": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "svd": {
+      "avg_throughput_mbps": 0.0,
+      "peak_throughput_mbps": 0.0,
+      "gain_db": 7.0,
+      "description": "SVD Optimal Beamforming",
+      "uses_sionna": true,
+      "snr_range": [
+        0.0,
+        2.0,
+        4.0,
+        6.0,
+        8.0,
+        10.0,
+        12.0,
+        14.0,
+        16.0,
+        18.0,
+        20.0,
+        22.0,
+        24.0,
+        26.0,
+        28.0,
+        30.0
+      ],
+      "throughput_vs_snr": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    }
+  },
+  "summary": {
+    "best_mimo_config": "SISO_1x1",
+    "best_mimo_throughput": 0.0,
+    "best_beamforming": "omnidirectional",
+    "best_bf_throughput": 0.0,
+    "combined_estimate_mbps": 0.0
+  }
+}
