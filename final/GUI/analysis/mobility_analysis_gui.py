@@ -384,14 +384,14 @@ class MobilityAnalysisGUI:
         if progress_callback:
             progress_callback("Generando gráficos de movilidad...")
         
-        # Create comprehensive mobility analysis plot
-        fig = plt.figure(figsize=(20, 16))
+        # Create comprehensive mobility analysis plot (2x2 layout)
+        fig = plt.figure(figsize=(16, 12))
         
         # Define colors for patterns
         colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD']
         
         # 1. Trajectory Comparison (3D)
-        ax1 = fig.add_subplot(2, 3, 1, projection='3d')
+        ax1 = fig.add_subplot(2, 2, 1, projection='3d')
         for i, (pattern_key, result) in enumerate(results.items()):
             traj = result['trajectory']
             ax1.plot(traj['x'], traj['y'], traj['z'], 
@@ -411,7 +411,7 @@ class MobilityAnalysisGUI:
         ax1.grid(True, alpha=0.3)
         
         # 2. Throughput vs Time
-        ax2 = fig.add_subplot(2, 3, 2)
+        ax2 = fig.add_subplot(2, 2, 2)
         for i, (pattern_key, result) in enumerate(results.items()):
             perf = result['performance']
             ax2.plot(perf['time'], perf['throughput'], 
@@ -424,54 +424,35 @@ class MobilityAnalysisGUI:
         ax2.grid(True, alpha=0.3)
         ax2.legend()
         
-        # 3. Performance Comparison Bars
-        ax3 = fig.add_subplot(2, 3, 3)
-        pattern_names = [result['name'][:12] for result in results.values()]  # Truncate names
-        avg_throughputs = [result['performance']['avg_throughput'] for result in results.values()]
+        # 3. Performance Comparison Bars - CORREGIDO
+        ax3 = fig.add_subplot(2, 2, 3)
         
-        bars = ax3.bar(pattern_names, avg_throughputs, color=colors[:len(pattern_names)])
+        # Get all patterns in order
+        pattern_names = []
+        avg_throughputs = []
+        colors_bars = []
+        
+        for i, (pattern_key, result) in enumerate(results.items()):
+            pattern_names.append(result['name'])
+            avg_throughputs.append(result['performance']['avg_throughput'])
+            colors_bars.append(colors[i % len(colors)])
+        
+        bars = ax3.bar(range(len(pattern_names)), avg_throughputs, color=colors_bars, alpha=0.8)
         ax3.set_ylabel('Throughput Promedio [Mbps]', fontweight='bold')
         ax3.set_title('Comparación Performance\nThroughput Promedio por Patrón', fontweight='bold')
-        ax3.tick_params(axis='x', rotation=45)
+        ax3.set_xticks(range(len(pattern_names)))
+        ax3.set_xticklabels(pattern_names, rotation=45, ha='right')
+        ax3.grid(True, alpha=0.3, axis='y')
         
         # Add value labels on bars
         for bar, value in zip(bars, avg_throughputs):
             height = bar.get_height()
-            ax3.text(bar.get_x() + bar.get_width()/2., height + 10,
-                    f'{value:.0f}', ha='center', va='bottom', fontweight='bold')
+            ax3.text(bar.get_x() + bar.get_width()/2., height + 50,
+                    f'{value:.0f}', ha='center', va='bottom', fontweight='bold', fontsize=10)
         
-        # 4. Stability Analysis
-        ax4 = fig.add_subplot(2, 3, 4)
-        stability_scores = [result['performance']['stability_score'] for result in results.values()]
-        scatter = ax4.scatter(avg_throughputs, stability_scores, 
-                            c=colors[:len(pattern_names)], s=200, alpha=0.7)
-        
-        for i, (x, y, name) in enumerate(zip(avg_throughputs, stability_scores, pattern_names)):
-            ax4.annotate(name, (x, y), xytext=(5, 5), textcoords='offset points', fontsize=9)
-        
-        ax4.set_xlabel('Throughput Promedio [Mbps]', fontweight='bold')
-        ax4.set_ylabel('Score de Estabilidad', fontweight='bold')
-        ax4.set_title('Análisis Estabilidad vs Performance\nOptimización Multi-Objetivo', fontweight='bold')
-        ax4.grid(True, alpha=0.3)
-        
-        # 5. Distance vs Performance
-        ax5 = fig.add_subplot(2, 3, 5)
-        distances = [result['trajectory']['total_distance'] for result in results.values()]
-        total_data = [result['performance']['total_data_mb'] for result in results.values()]
-        
-        scatter2 = ax5.scatter(distances, total_data, c=colors[:len(pattern_names)], s=200, alpha=0.7)
-        
-        for i, (x, y, name) in enumerate(zip(distances, total_data, pattern_names)):
-            ax5.annotate(name, (x, y), xytext=(5, 5), textcoords='offset points', fontsize=9)
-        
-        ax5.set_xlabel('Distancia Total [m]', fontweight='bold')
-        ax5.set_ylabel('Total Datos [MB]', fontweight='bold')
-        ax5.set_title('Eficiencia Energética\nDatos vs Distancia Recorrida', fontweight='bold')
-        ax5.grid(True, alpha=0.3)
-        
-        # 6. Best Pattern Summary
-        ax6 = fig.add_subplot(2, 3, 6)
-        ax6.axis('off')
+        # 4. Best Pattern Summary
+        ax4 = fig.add_subplot(2, 2, 4)
+        ax4.axis('off')
         
         # Summary text
         best_avg = comparison['best_avg_throughput']
@@ -480,39 +461,41 @@ class MobilityAnalysisGUI:
         most_efficient = comparison['most_efficient']
         
         summary_text = f"""
-ANALISIS COMPARATIVO MOVILIDAD
+ANÁLISIS COMPARATIVO MOVILIDAD
 
 Mejor Promedio:
    {self.trajectory_patterns[best_avg['pattern']]}
    {best_avg['value']:.0f} Mbps
 
-Mas Estable:
+Más Estable:
    {self.trajectory_patterns[most_stable['pattern']]}
    Score: {most_stable['value']:.2f}
 
-Pico Maximo:
+Pico Máximo:
    {self.trajectory_patterns[highest_peak['pattern']]}
    {highest_peak['value']:.0f} Mbps
 
-Mas Eficiente:
+Más Eficiente:
    {self.trajectory_patterns[most_efficient['pattern']]}
    {most_efficient['value']:.1f} MB/m
 
-Recomendacion:
+Recomendación:
    Usar {self.trajectory_patterns[best_avg['pattern']]} para
-   maximo throughput promedio
+   máximo throughput promedio
         """
         
-        ax6.text(0.05, 0.95, summary_text, transform=ax6.transAxes, fontsize=11,
-                verticalalignment='top', bbox=dict(boxstyle="round,pad=0.4", 
+        ax4.text(0.05, 0.95, summary_text, transform=ax4.transAxes, fontsize=11,
+                verticalalignment='top', fontfamily='monospace',
+                bbox=dict(boxstyle="round,pad=0.4", 
                 facecolor='lightblue', alpha=0.8))
+        ax4.set_title('Resumen de Resultados\n(Sionna Analysis)', fontweight='bold')
         
         # Main title
-        fig.suptitle('ANÁLISIS MOVILIDAD UAV - Sistema 5G NR Munich\nComparación Patrones de Trayectoria y Optimización Performance', 
-                    fontsize=16, fontweight='bold', y=0.98)
+        fig.suptitle('ANÁLISIS MOVILIDAD UAV - Sistema 5G NR Munich\nComparación Patrones de Trayectoria', 
+                    fontsize=14, fontweight='bold', y=0.98)
         
         plt.tight_layout()
-        plt.subplots_adjust(top=0.92, hspace=0.3, wspace=0.3)
+        plt.subplots_adjust(top=0.93, hspace=0.35, wspace=0.3)
         
         if progress_callback:
             progress_callback("Guardando análisis de movilidad...")

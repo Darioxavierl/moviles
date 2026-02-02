@@ -212,12 +212,20 @@ Evalúa diferentes patrones de trayectoria del UAV para determinar el patrón de
 - **Coverage completeness** (área visitada)
 
 ### 📈 **Gráficas que Devuelve**
-1. **Trayectorias 3D**: 6 patrones en espacio 3D con throughput
-2. **Throughput temporal**: Series de tiempo por patrón
-3. **Comparación performance**: Barras por patrón
-4. **Mapa de calor**: Throughput vs posición para mejor patrón
+**Tab "Gráficos y Resultados" (4 gráficos en layout 2×2):**
+1. **Trayectorias 3D** (Arriba Izq): 6 patrones de movimiento en espacio 3D con colores diferenciados
+2. **Throughput vs Tiempo** (Arriba Derecha): Series temporal de performance para cada patrón
+3. **Comparación Performance** (Abajo Izq): Barras comparativas del throughput promedio por patrón ⭐
+4. **Resumen de Resultados** (Abajo Derecha): Mejores configuraciones y recomendaciones
 
-**Resultado típico**: Trayectoria optimizada 1,649 Mbps promedio
+**Tab "Escena 3D":**
+- **✅ Munich 3D Urban** con 6 edificios y gNB
+- **✅ 6 trayectorias visualizadas** simultáneamente en colores diferentes
+- **✅ Trayectoria óptima** destacada en color dorado
+- **✅ Puntos de inicio/fin** marcados para cada patrón
+- **✅ Estadísticas en overlay**: Throughput, distancia, eficiencia por patrón
+
+**Resultado típico**: Trayectoria optimizada con 1,649 Mbps promedio
 
 ---
 
