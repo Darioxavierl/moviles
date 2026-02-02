@@ -5,6 +5,7 @@ Incluye escenarios 3D Munich, ray tracing real y visualizaciones avanzadas
 """
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.ticker import FuncFormatter
 from mpl_toolkits.mplot3d import Axes3D
 import os
 import json
@@ -536,9 +537,12 @@ class MIMOBeamformingGUI:
         ax3.tick_params(axis='x', rotation=45)
         ax3.grid(True, alpha=0.3)
         
+        # Aplicar FuncFormatter para mostrar 3 decimales
+        ax3.yaxis.set_major_formatter(FuncFormatter(lambda x, p: f'{x:.3f}'))
+        
         for bar, val in zip(bars3, spectral_effs):
             ax3.text(bar.get_x() + bar.get_width()/2, bar.get_height() + val*0.01,
-                    f'{val:.1f}', ha='center', va='bottom', fontweight='bold')
+                    f'{val:.3f}', ha='center', va='bottom', fontweight='bold')
         
         # 4. 3D Munich Scenario Visualization (Bottom Left)
         ax4 = plt.subplot(2, 3, 4, projection='3d')
