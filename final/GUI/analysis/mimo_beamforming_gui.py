@@ -488,11 +488,11 @@ class MIMOBeamformingGUI:
         
         print(f"\n📊 GENERANDO GRÁFICOS MIMO + BEAMFORMING (SIONNA)")
         
-        # Create comprehensive figure
-        fig = plt.figure(figsize=(16, 12))
+        # Create comprehensive figure (2x3 layout = 5 subplots, sin "Channel vs MIMO Gains")
+        fig = plt.figure(figsize=(18, 12))
         
         # 1. MIMO Throughput Comparison (Top Left)
-        ax1 = plt.subplot(2, 2, 1)
+        ax1 = plt.subplot(2, 3, 1)
         
         configs = list(mimo_results.keys())
         throughputs = [mimo_results[c].get('throughput_mbps', 0) for c in configs]
@@ -509,8 +509,8 @@ class MIMOBeamformingGUI:
             ax1.text(bar.get_x() + bar.get_width()/2, bar.get_height() + val*0.01,
                     f'{val:.0f}', ha='center', va='bottom', fontweight='bold')
         
-        # 2. Beamforming vs SNR (Top Right)
-        ax2 = plt.subplot(2, 2, 2)
+        # 2. Beamforming vs SNR (Top Middle)
+        ax2 = plt.subplot(2, 3, 2)
         
         colors_bf = ['gray', 'green', 'orange', 'red', 'purple']
         for i, (strategy, data) in enumerate(beamforming_results.items()):
@@ -526,8 +526,8 @@ class MIMOBeamformingGUI:
         ax2.grid(True, alpha=0.3)
         ax2.legend(fontsize=9)
         
-        # 3. Spectral Efficiency Comparison (Top Right) → (Bottom Left)
-        ax3 = plt.subplot(2, 2, 3)
+        # 3. Spectral Efficiency Comparison (Top Right)
+        ax3 = plt.subplot(2, 3, 3)
         
         spectral_effs = [mimo_results[c].get('spectral_efficiency', 0) for c in configs]
         bars3 = ax3.bar(configs, spectral_effs, color='lightgreen', alpha=0.7)
@@ -541,7 +541,7 @@ class MIMOBeamformingGUI:
                     f'{val:.1f}', ha='center', va='bottom', fontweight='bold')
         
         # 4. 3D Munich Scenario Visualization (Bottom Left)
-        ax4 = plt.subplot(2, 2, 4, projection='3d')
+        ax4 = plt.subplot(2, 3, 4, projection='3d')
         
         # Munich buildings - definir según Sionna dataset
         munich_buildings = [
@@ -603,8 +603,8 @@ class MIMOBeamformingGUI:
         # Grid sutil
         ax4.grid(True, alpha=0.2)
         
-        # Performance Summary (Bottom Right)
-        ax5 = plt.subplot(2, 2, 4)
+        # 5. Performance Summary (Bottom Right)
+        ax5 = plt.subplot(2, 3, 5)
         
         # Create summary metrics
         best_mimo = max(mimo_results.items(), key=lambda x: x[1].get('throughput_mbps', 0))
