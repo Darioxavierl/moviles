@@ -1,0 +1,37 @@
+{
+  "timestamp": "2026-02-01T10:00:00",
+  "system_info": {
+    "version": "UAV 5G NR Analysis GUI v1.0",
+    "scenario": "Munich 3D Urban"
+  },
+  "rf_config": {
+    "frequency": "3.5e9",
+    "bandwidth": "100e6", 
+    "tx_power": "30",
+    "noise_figure": "7"
+  },
+  "positions": {
+    "gnb_position": [300, 200, 60],
+    "uav1_position": [100, 100, 50]
+  },
+  "antenna_config": {
+    "gnb_array": {
+      "num_rows": 16,
+      "num_cols": 16,
+      "element_spacing": 0.5,
+      "polarization": "dual"
+    },
+    "uav_array": {
+      "num_rows": 2,
+      "num_cols": 2,
+      "element_spacing": 0.5,
+      "polarization": "single"
+    }
+  },
+  "simulation_settings": {
+    "num_realizations": 100,
+    "max_reflection_order": 3,
+    "enable_los": true,
+    "enable_nlos": true
+  }
+}

@@ -1,0 +1,267 @@
+{
+  "simulation_type": "interference_analysis",
+  "timestamp": "2026-02-01",
+  "system_config": {
+    "scenario": "Munich Multi-UAV Interference 5G NR",
+    "max_uavs": 8,
+    "interference_scenarios": 5,
+    "resource_blocks": 273,
+    "bandwidth": "100 MHz",
+    "analysis_area": "\u00b1300m"
+  },
+  "interference_analysis": {
+    "max_uavs_supported": 8,
+    "scenarios_analyzed": 5,
+    "resource_blocks": 273,
+    "analysis_area_m2": 360000
+  },
+  "scenario_results": {
+    "low_density": {
+      "name": "Baja Densidad",
+      "scenario_info": {
+        "name": "Baja Densidad",
+        "uav_count": 3,
+        "area_factor": 1.0
+      },
+      "performance_stats": {
+        "num_uavs": 3,
+        "total_throughput_mbps": 471.3784033122621,
+        "avg_throughput_mbps": 157.1261344374207,
+        "min_throughput_mbps": 126.1049616925287,
+        "max_throughput_mbps": 189.40579142431076,
+        "avg_sinr_db": 17.602234405874054,
+        "min_sinr_db": 12.904819837097524,
+        "throughput_fairness": 0.6657925332917923
+      },
+      "uav_individual_stats": {
+        "throughputs_mbps": [
+          126.1049616925287,
+          189.40579142431076,
+          155.86765019542267
+        ],
+        "sinr_values_db": [
+          12.904819837097524,
+          22.481685350908663,
+          17.42019802961598
+        ],
+        "distances_to_gnb_m": [
+          298.900625067669,
+          141.81926450802715,
+          133.41416297192413
+        ]
+      }
+    },
+    "medium_density": {
+      "name": "Densidad Media",
+      "scenario_info": {
+        "name": "Densidad Media",
+        "uav_count": 5,
+        "area_factor": 0.8
+      },
+      "performance_stats": {
+        "num_uavs": 5,
+        "total_throughput_mbps": 409.73380893246656,
+        "avg_throughput_mbps": 81.94676178649331,
+        "min_throughput_mbps": 70.62954829047528,
+        "max_throughput_mbps": 97.46432724565088,
+        "avg_sinr_db": 14.49231302463831,
+        "min_sinr_db": 11.62333386475298,
+        "throughput_fairness": 0.7246707619748841
+      },
+      "uav_individual_stats": {
+        "throughputs_mbps": [
+          97.46432724565088,
+          70.62954829047528,
+          87.89871828359645,
+          74.92407748137231,
+          78.81713763137162
+        ],
+        "sinr_values_db": [
+          18.413521661614332,
+          11.62333386475298,
+          16.00235323577969,
+          12.71703471535709,
+          13.705321645687459
+        ],
+        "distances_to_gnb_m": [
+          122.73015784907412,
+          280.2077508484143,
+          223.13814035333547,
+          244.94138872986005,
+          180.48649408420061
+        ]
+      }
+    },
+    "high_density": {
+      "name": "Alta Densidad",
+      "scenario_info": {
+        "name": "Alta Densidad",
+        "uav_count": 8,
+        "area_factor": 0.6
+      },
+      "performance_stats": {
+        "num_uavs": 8,
+        "total_throughput_mbps": 355.49726371677775,
+        "avg_throughput_mbps": 44.43715796459722,
+        "min_throughput_mbps": 33.10136601810872,
+        "max_throughput_mbps": 58.81623938237561,
+        "avg_sinr_db": 11.725378084750634,
+        "min_sinr_db": 7.056678664612611,
+        "throughput_fairness": 0.5627929695217406
+      },
+      "uav_individual_stats": {
+        "throughputs_mbps": [
+          58.81623938237561,
+          47.07496368761092,
+          47.78126745385681,
+          33.10136601810872,
+          42.00022574300894,
+          48.514456306239445,
+          41.35964523565097,
+          36.84909988992634
+        ],
+        "sinr_values_db": [
+          17.56770250844591,
+          12.817653376530503,
+          13.104729447069515,
+          7.056678664612611,
+          10.746696592167538,
+          13.402490672248966,
+          10.484005223316304,
+          8.623068193613728
+        ],
+        "distances_to_gnb_m": [
+          77.62749990878552,
+          177.41350132246544,
+          96.04472154553042,
+          181.8676285142298,
+          186.43574281762565,
+          220.0029075553302,
+          144.23491875202023,
+          181.29870019948328
+        ]
+      }
+    },
+    "clustered": {
+      "name": "UAVs Agrupados",
+      "scenario_info": {
+        "name": "UAVs Agrupados",
+        "uav_count": 6,
+        "area_factor": 0.4
+      },
+      "performance_stats": {
+        "num_uavs": 6,
+        "total_throughput_mbps": 326.4149710350447,
+        "avg_throughput_mbps": 54.40249517250745,
+        "min_throughput_mbps": 41.97034236815032,
+        "max_throughput_mbps": 66.77249678531638,
+        "avg_sinr_db": 10.238339084010574,
+        "min_sinr_db": 6.370249216089638,
+        "throughput_fairness": 0.6285573310683781
+      },
+      "uav_individual_stats": {
+        "throughputs_mbps": [
+          61.39534181585208,
+          41.97034236815032,
+          66.77249678531638,
+          52.23659467877175,
+          50.26426736435533,
+          53.77592802259884
+        ],
+        "sinr_values_db": [
+          12.399195699586707,
+          6.370249216089638,
+          14.037280071276694,
+          9.586371639434601,
+          8.975111530490576,
+          10.061826347185214
+        ],
+        "distances_to_gnb_m": [
+          121.91060051319477,
+          172.72849390962384,
+          118.8875389025804,
+          179.6493958853717,
+          188.04857400335555,
+          200.7249705409419
+        ]
+      }
+    },
+    "distributed": {
+      "name": "UAVs Distribuidos",
+      "scenario_info": {
+        "name": "UAVs Distribuidos",
+        "uav_count": 7,
+        "area_factor": 1.2
+      },
+      "performance_stats": {
+        "num_uavs": 7,
+        "total_throughput_mbps": 367.5316002998294,
+        "avg_throughput_mbps": 52.50451432854705,
+        "min_throughput_mbps": 44.97590663193285,
+        "max_throughput_mbps": 60.96716082146279,
+        "avg_sinr_db": 12.34906090310156,
+        "min_sinr_db": 9.659134410546233,
+        "throughput_fairness": 0.7377070873226492
+      },
+      "uav_individual_stats": {
+        "throughputs_mbps": [
+          49.87270173776524,
+          57.61659343400204,
+          56.964324524462846,
+          60.96716082146279,
+          45.01843162783113,
+          44.97590663193285,
+          52.11648152237252
+        ],
+        "sinr_values_db": [
+          11.417129054084505,
+          14.173105840919815,
+          13.941777673102631,
+          15.359677660839457,
+          9.674472404251599,
+          9.659134410546233,
+          12.218129277966689
+        ],
+        "distances_to_gnb_m": [
+          345.34472083813097,
+          232.04428208499863,
+          347.8631815650883,
+          257.6782371805143,
+          328.6096048807491,
+          330.4610769985211,
+          357.2362464165468
+        ]
+      }
+    }
+  },
+  "comparative_analysis": {
+    "best_total_throughput": {
+      "scenario": "Baja Densidad",
+      "value_mbps": 471.3784033122621
+    },
+    "best_avg_throughput": {
+      "scenario": "Baja Densidad",
+      "value_mbps": 157.1261344374207
+    },
+    "best_sinr": {
+      "scenario": "Baja Densidad",
+      "value_db": 17.602234405874054
+    },
+    "most_balanced": {
+      "scenario": "UAVs Distribuidos",
+      "balance_score": 1.5035778788478862
+    }
+  },
+  "recommendations": {
+    "for_maximum_capacity": "Baja Densidad",
+    "for_best_individual_performance": "Baja Densidad",
+    "for_best_signal_quality": "Baja Densidad",
+    "for_fairness": "UAVs Distribuidos"
+  },
+  "summary": {
+    "best_scenario_overall": "Baja Densidad",
+    "max_total_throughput": "471.4 Mbps",
+    "best_individual_throughput": "157.1 Mbps",
+    "interference_impact": "Significativo en escenarios de alta densidad"
+  }
+}
