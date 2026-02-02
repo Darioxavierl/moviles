@@ -41,8 +41,6 @@ class SimulationWorker(QThread):
                 result = self.run_mimo_simulation()
             elif self.simulation_type == "height_analysis":
                 result = self.run_height_simulation()
-            elif self.simulation_type == "coverage_analysis":
-                result = self.run_coverage_simulation()
             elif self.simulation_type == "mobility_analysis":
                 result = self.run_mobility_simulation()
             elif self.simulation_type == "interference_analysis":
@@ -116,29 +114,6 @@ class SimulationWorker(QThread):
             
         except Exception as e:
             self.error.emit(f"Error en análisis de altura: {str(e)}")
-            return None
-
-    def run_coverage_simulation(self):
-        """Simulación de cobertura real integrada"""
-        
-        # Import coverage analysis
-        try:
-            from analysis.coverage_analysis_gui import run_coverage_analysis_gui
-            
-            # Crear directorio outputs si no existe
-            output_dir = os.path.join(os.path.dirname(__file__), "outputs")
-            os.makedirs(output_dir, exist_ok=True)
-            
-            # Ejecutar análisis real
-            result = run_coverage_analysis_gui(
-                output_dir=output_dir, 
-                progress_callback=lambda msg: self.progress.emit(msg)
-            )
-            
-            return result
-            
-        except Exception as e:
-            self.error.emit(f"Error en análisis de cobertura: {str(e)}")
             return None
 
     def run_mobility_simulation(self):
@@ -260,26 +235,6 @@ class ControlPanel(QWidget):
         """)
         height_btn.clicked.connect(lambda: self.simulation_requested.emit("height_analysis", {}))
         sim_layout.addWidget(height_btn)
-        
-        # Coverage Analysis (ACTIVO)
-        coverage_btn = QPushButton("Analisis de Cobertura")
-        coverage_btn.setMinimumHeight(50)
-        coverage_btn.setEnabled(True)  # Ahora habilitado
-        coverage_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #16a085;
-                color: white;
-                border: none;
-                border-radius: 10px;
-                font-size: 14px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #138d75;
-            }
-        """)
-        coverage_btn.clicked.connect(lambda: self.simulation_requested.emit("coverage_analysis", {}))
-        sim_layout.addWidget(coverage_btn)
         
         # Mobility Analysis (ACTIVO)
         mobility_btn = QPushButton("Analisis de Movilidad")

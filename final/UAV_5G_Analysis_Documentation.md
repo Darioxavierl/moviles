@@ -177,52 +177,7 @@ Determina la altura óptima de vuelo del UAV analizando el throughput en funció
 
 ---
 
-## FASE 3: Análisis de Cobertura
-
-### 🗺️ **¿Qué hace este botón?**
-Genera mapas de cobertura 2D analizando el throughput en diferentes posiciones horizontales con altura óptima fija (de Fase 2).
-
-### 🔧 **Uso de Sionna**
-- **Modelos analíticos** principalmente
-- Path loss urbano con efectos de edificios
-- LoS/NLoS probabilístico según distancia y obstáculos
-- MIMO gains aplicados por posición
-
-### 🚁 **Definición de UAVs**
-- **Grid de posiciones**: 12x12 = 144 puntos de análisis
-- **Área de cobertura**: ±250m desde gNB
-- **Altura fija**: 40m (resultado de Fase 2)
-- **Array**: 4 antenas por UAV
-
-### 🔄 **Flujo de Simulación**
-1. **Grid generation**: 144 posiciones (x,y) uniformemente distribuidas
-2. **Para cada posición**:
-   - Calcula distancia 3D al gNB
-   - Evalúa path loss urbano (ITU-R)
-   - Determina probabilidad LoS
-   - Aplica shadowing effects
-   - Considera bloqueo por edificios
-   - Calcula throughput resultante
-3. **Estadísticas**: Promedio, máximo, mínimo de cobertura
-
-### 📊 **Qué Calcula**
-- **Throughput map** 2D (Mbps por posición)
-- **Path loss heatmap** 
-- **LoS probability map**
-- **Coverage statistics** (promedio, percentiles)
-- **Área efectiva** de cobertura
-
-### 📈 **Gráficas que Devuelve**
-1. **Heatmap throughput**: Mapa de colores con throughput por posición
-2. **Path loss map**: Mapa de pérdidas de propagación
-3. **LoS/NLoS regions**: Zonas con línea de vista
-4. **Estadísticas**: Tabla con métricas de cobertura
-
-**Resultado típico**: 1,365 Mbps promedio en área de 0.2 km²
-
----
-
-## FASE 4: Análisis de Movilidad
+## FASE 3: Análisis de Movilidad
 
 ### 🛸 **¿Qué hace este botón?**
 Evalúa diferentes patrones de trayectoria del UAV para determinar el patrón de movimiento que maximiza el throughput promedio durante la misión.
@@ -266,7 +221,7 @@ Evalúa diferentes patrones de trayectoria del UAV para determinar el patrón de
 
 ---
 
-## FASE 5: Análisis de Interferencia
+## FASE 4: Análisis de Interferencia
 
 ### 📡 **¿Qué hace este botón?**
 Analiza escenarios multi-UAV evaluando interferencia entre usuarios, optimización SINR y capacity con múltiples UAVs simultáneos.
@@ -316,7 +271,6 @@ Analiza escenarios multi-UAV evaluando interferencia entre usuarios, optimizaci�
 |--------|-----------|----------------|-------------|---------------|
 | **MIMO** | ✅ | ✅ | ✅ | BasicUAVSystem completo + RT real + 7 paths |
 | **Height** | ✅ | ✅ | ✅ | **REFACTOR**: Ray tracing real 3D + BasicUAVSystem + Fallback analítico |
-| **Coverage** | ⚠️ | ⚠️ | ❌ | Modelos híbridos |
 | **Mobility** | ✅ | ✅ | ⚠️ | RT temporal dinámico |
 | **Interference** | ✅ | ✅ | ✅ | Sistema multi-usuario completo |
 
