@@ -1,0 +1,11 @@
+tensorflow[and-cuda]
+sionna
+numpy 
+scipy 
+matplotlib 
+jupyter
+pyvista 
+trimesh
+PyQt6
+pandas
+pillow

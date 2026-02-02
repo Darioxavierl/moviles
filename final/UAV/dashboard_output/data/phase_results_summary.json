@@ -1,0 +1,69 @@
+{
+  "phase_1": {
+    "name": "Configuraci\u00f3n Inicial",
+    "status": "completed",
+    "key_results": {
+      "system_setup": "Munich 3D, 3.5GHz, 100MHz",
+      "initial_performance": "10.5 Mbps baseline"
+    }
+  },
+  "phase_2": {
+    "name": "An\u00e1lisis de Altura",
+    "status": "completed",
+    "key_results": {
+      "optimal_height_m": 50,
+      "max_throughput_mbps": 28.7,
+      "height_range": [
+        10,
+        200
+      ],
+      "performance_gain": "2.7x vs 10m",
+      "key_insight": "NLoS mejor que LoS por diversidad multipath"
+    },
+    "data_points": 20
+  },
+  "phase_3": {
+    "name": "An\u00e1lisis de Cobertura",
+    "status": "completed",
+    "key_results": {
+      "max_throughput_mbps": 266.4,
+      "avg_throughput_mbps": 18.5,
+      "nlos_throughput_mbps": 29.5,
+      "los_throughput_mbps": 10.7,
+      "nlos_advantage": "2.76x vs LoS",
+      "coverage_efficiency": 0.74,
+      "grid_points_analyzed": 2500
+    }
+  },
+  "phase_4": {
+    "name": "MIMO y Beamforming",
+    "status": "completed",
+    "key_results": {
+      "mimo_configurations": 6,
+      "beamforming_strategies": 6,
+      "max_theoretical_gbps": 12.2,
+      "practical_max_mbps": 10621,
+      "mimo_gain_vs_siso": 15.3,
+      "beamforming_gain_db": 7,
+      "optimal_mimo": "16x8 Massive MIMO",
+      "optimal_beamforming": "SVD Beamforming",
+      "combined_efficiency": 2.35
+    }
+  },
+  "phase_5": {
+    "name": "Multi-UAV y Relay",
+    "status": "completed",
+    "key_results": {
+      "topologies_analyzed": 5,
+      "max_throughput_mbps": 234.5,
+      "best_topology": "cooperative",
+      "relay_gain": 1.84,
+      "cooperation_gain": 2.75,
+      "diversity_gain": 1.5,
+      "reliability_max": 0.98,
+      "delay_min_ms": 5,
+      "relay_optimization_positions": 400,
+      "relay_improvement": 1.37
+    }
+  }
+}

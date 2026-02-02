@@ -1,0 +1,7 @@
+{
+  "scenario": "Munich 3D Urban",
+  "frequency_ghz": 3.5,
+  "bandwidth_mhz": 100,
+  "coverage_area_km2": 0.25,
+  "analysis_date": "2026-02-01 16:42:01"
+}
