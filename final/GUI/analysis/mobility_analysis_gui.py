@@ -4,6 +4,7 @@ Análisis de diferentes patrones de movimiento para optimización de throughput
 """
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.ticker import FuncFormatter
 from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.animation import FuncAnimation
 import os
@@ -421,6 +422,7 @@ class MobilityAnalysisGUI:
         ax2.set_xlabel('Tiempo [s]', fontweight='bold', fontsize=12)
         ax2.set_ylabel('Throughput [Mbps]', fontweight='bold', fontsize=12)
         ax2.set_title('Throughput vs Tiempo\nPerformance Temporal', fontweight='bold')
+        ax2.yaxis.set_major_formatter(FuncFormatter(lambda x, p: f'{x:.3f}'))
         ax2.grid(True, alpha=0.3)
         ax2.legend()
         
@@ -442,6 +444,7 @@ class MobilityAnalysisGUI:
         ax3.set_title('Comparación Performance\nThroughput Promedio por Patrón', fontweight='bold', fontsize=12)
         ax3.set_xticks(range(len(pattern_names)))
         ax3.set_xticklabels(pattern_names, rotation=45, ha='right')
+        ax3.yaxis.set_major_formatter(FuncFormatter(lambda x, p: f'{x:.3f}'))
         ax3.grid(True, alpha=0.3, axis='y')
         
         # Add value labels on bars

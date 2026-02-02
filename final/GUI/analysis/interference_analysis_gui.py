@@ -4,6 +4,7 @@ Análisis de interferencia entre múltiples UAVs y optimización SINR
 """
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.ticker import FuncFormatter
 from matplotlib.colors import LinearSegmentedColormap
 import os
 import json
@@ -384,6 +385,7 @@ class InterferenceAnalysisGUI:
         ax2.set_title('Comparación SINR por Escenario\nCalidad de Señal vs Interferencia', fontweight='bold', fontsize=12)
         ax2.set_xticks(x_pos)
         ax2.set_xticklabels(scenario_names, rotation=45, ha='right')
+        ax2.yaxis.set_major_formatter(FuncFormatter(lambda x, p: f'{x:.3f}'))
         ax2.legend()
         ax2.grid(True, alpha=0.3)
         
@@ -409,6 +411,8 @@ class InterferenceAnalysisGUI:
         ax3.set_title('Análisis Throughput Multi-UAV\nCapacidad Total vs Individual', fontweight='bold', fontsize=12)
         ax3.set_xticks(x_pos)
         ax3.set_xticklabels(scenario_names, rotation=45, ha='right')
+        ax3.yaxis.set_major_formatter(FuncFormatter(lambda x, p: f'{x:.3f}'))
+        ax3_twin.yaxis.set_major_formatter(FuncFormatter(lambda x, p: f'{x:.3f}'))
         ax3.grid(True, alpha=0.3)
         
         # Add value labels

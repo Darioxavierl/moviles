@@ -4,6 +4,7 @@ Análisis de cobertura con mapas de throughput, LoS/NLoS adaptado para PyQt6
 """
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.ticker import FuncFormatter
 from matplotlib.colors import LinearSegmentedColormap
 import os
 import json
@@ -269,6 +270,7 @@ class CoverageAnalysisGUI:
         # Colorbar
         cbar1 = plt.colorbar(im1, ax=ax1)
         cbar1.set_label('Throughput [Mbps]', fontweight='bold', fontsize=12)
+        cbar1.ax.yaxis.set_major_formatter(FuncFormatter(lambda x, p: f'{x:.3f}'))
         
         # 2. LoS/NLoS Map
         im2 = ax2.contourf(results['X'], results['Y'], results['los_map'], 
@@ -301,6 +303,7 @@ class CoverageAnalysisGUI:
         
         cbar3 = plt.colorbar(im3, ax=ax3)
         cbar3.set_label('Path Loss [dB]', fontweight='bold', fontsize=12)
+        cbar3.ax.yaxis.set_major_formatter(FuncFormatter(lambda x, p: f'{x:.3f}'))
         
         # 4. SNR Map
         im4 = ax4.contourf(results['X'], results['Y'], results['snr_map'], 
@@ -313,6 +316,7 @@ class CoverageAnalysisGUI:
         
         cbar4 = plt.colorbar(im4, ax=ax4)
         cbar4.set_label('SNR [dB]', fontweight='bold', fontsize=12)
+        cbar4.ax.yaxis.set_major_formatter(FuncFormatter(lambda x, p: f'{x:.3f}'))
         
         # Main title
         fig.suptitle('ANÁLISIS COBERTURA 2D MUNICH - Sistema UAV 5G NR\nMapas de Throughput, LoS/NLoS, Path Loss y SNR', 

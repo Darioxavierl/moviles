@@ -4,6 +4,7 @@ Análisis de throughput vs altura UAV adaptado para interfaz PyQt6
 """
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.ticker import FuncFormatter
 import os
 import json
 import sys
@@ -401,6 +402,7 @@ class HeightAnalysisGUI:
         ax2.set_xlabel('Altura UAV [m]', fontweight='bold', fontsize=12)
         ax2.set_ylabel('Path Loss [dB]', fontweight='bold', fontsize=12)
         ax2.set_title('Path Loss vs Altura', fontweight='bold', fontsize=12)
+        ax2.yaxis.set_major_formatter(FuncFormatter(lambda x, p: f'{x:.3f}'))
         ax2.grid(True, alpha=0.4)
         
         # Plot 3: LoS Probability vs Height
@@ -408,6 +410,7 @@ class HeightAnalysisGUI:
         ax3.set_xlabel('Altura UAV [m]', fontweight='bold', fontsize=12)
         ax3.set_ylabel('Probabilidad LoS', fontweight='bold', fontsize=12)
         ax3.set_title('Probabilidad LoS vs Altura', fontweight='bold', fontsize=12)
+        ax3.yaxis.set_major_formatter(FuncFormatter(lambda x, p: f'{x:.3f}'))
         ax3.set_ylim([0, 1.1])
         ax3.grid(True, alpha=0.4)
         
@@ -420,6 +423,7 @@ class HeightAnalysisGUI:
         ax4.set_xlabel('Altura UAV [m]', fontweight='bold', fontsize=12)
         ax4.set_ylabel('SNR [dB]', fontweight='bold', fontsize=12)
         ax4.set_title('SNR vs Altura', fontweight='bold', fontsize=12)
+        ax4.yaxis.set_major_formatter(FuncFormatter(lambda x, p: f'{x:.3f}'))
         ax4.grid(True, alpha=0.4)
         
         # Add SNR threshold lines
