@@ -489,10 +489,10 @@ class MIMOBeamformingGUI:
         print(f"\n📊 GENERANDO GRÁFICOS MIMO + BEAMFORMING (SIONNA)")
         
         # Create comprehensive figure
-        fig = plt.figure(figsize=(20, 16))
+        fig = plt.figure(figsize=(16, 12))
         
         # 1. MIMO Throughput Comparison (Top Left)
-        ax1 = plt.subplot(2, 3, 1)
+        ax1 = plt.subplot(2, 2, 1)
         
         configs = list(mimo_results.keys())
         throughputs = [mimo_results[c].get('throughput_mbps', 0) for c in configs]
@@ -509,8 +509,8 @@ class MIMOBeamformingGUI:
             ax1.text(bar.get_x() + bar.get_width()/2, bar.get_height() + val*0.01,
                     f'{val:.0f}', ha='center', va='bottom', fontweight='bold')
         
-        # 2. Beamforming vs SNR (Top Middle)
-        ax2 = plt.subplot(2, 3, 2)
+        # 2. Beamforming vs SNR (Top Right)
+        ax2 = plt.subplot(2, 2, 2)
         
         colors_bf = ['gray', 'green', 'orange', 'red', 'purple']
         for i, (strategy, data) in enumerate(beamforming_results.items()):
@@ -526,8 +526,8 @@ class MIMOBeamformingGUI:
         ax2.grid(True, alpha=0.3)
         ax2.legend(fontsize=9)
         
-        # 3. Spectral Efficiency Comparison (Top Right)
-        ax3 = plt.subplot(2, 3, 3)
+        # 3. Spectral Efficiency Comparison (Top Right) → (Bottom Left)
+        ax3 = plt.subplot(2, 2, 3)
         
         spectral_effs = [mimo_results[c].get('spectral_efficiency', 0) for c in configs]
         bars3 = ax3.bar(configs, spectral_effs, color='lightgreen', alpha=0.7)
@@ -541,7 +541,7 @@ class MIMOBeamformingGUI:
                     f'{val:.1f}', ha='center', va='bottom', fontweight='bold')
         
         # 4. 3D Munich Scenario Visualization (Bottom Left)
-        ax4 = plt.subplot(2, 3, 4, projection='3d')
+        ax4 = plt.subplot(2, 2, 4, projection='3d')
         
         # Munich buildings - definir según Sionna dataset
         munich_buildings = [
@@ -603,30 +603,8 @@ class MIMOBeamformingGUI:
         # Grid sutil
         ax4.grid(True, alpha=0.2)
         
-        # 5. Channel Gain Analysis (Bottom Middle)
-        ax5 = plt.subplot(2, 3, 5)
-        
-        channel_gains = [mimo_results[c].get('channel_gain_db', -100) for c in configs]
-        mimo_gains = [mimo_results[c].get('mimo_gain_db', 0) for c in configs]
-        
-        x_pos = np.arange(len(configs))
-        width = 0.35
-        
-        bars1 = ax5.bar(x_pos - width/2, channel_gains, width, 
-                       label='Channel Gain', color='lightcoral', alpha=0.7)
-        bars2 = ax5.bar(x_pos + width/2, mimo_gains, width,
-                       label='MIMO Gain', color='lightblue', alpha=0.7)
-        
-        ax5.set_xlabel('MIMO Configuration')
-        ax5.set_ylabel('Gain (dB)')
-        ax5.set_title('Channel vs MIMO Gains\n(Sionna Analysis)')
-        ax5.set_xticks(x_pos)
-        ax5.set_xticklabels(configs, rotation=45)
-        ax5.legend()
-        ax5.grid(True, alpha=0.3)
-        
-        # 6. Performance Summary (Bottom Right)
-        ax6 = plt.subplot(2, 3, 6)
+        # Performance Summary (Bottom Right)
+        ax5 = plt.subplot(2, 2, 4)
         
         # Create summary metrics
         best_mimo = max(mimo_results.items(), key=lambda x: x[1].get('throughput_mbps', 0))
@@ -657,13 +635,13 @@ SIONNA RT ANALYSIS SUMMARY
    ~{best_mimo[1].get('throughput_mbps', 0) * (1 + best_bf[1].get('gain_db', 0)/20):.0f} Mbps total capacity
         """
         
-        ax6.text(0.05, 0.95, summary_text, transform=ax6.transAxes, fontsize=10,
+        ax5.text(0.05, 0.95, summary_text, transform=ax5.transAxes, fontsize=10,
                 verticalalignment='top', fontfamily='monospace',
                 bbox=dict(boxstyle='round', facecolor='lightgray', alpha=0.8))
-        ax6.set_xlim(0, 1)
-        ax6.set_ylim(0, 1)
-        ax6.axis('off')
-        ax6.set_title('Analysis Summary\n(Sionna Implementation)', fontweight='bold')
+        ax5.set_xlim(0, 1)
+        ax5.set_ylim(0, 1)
+        ax5.axis('off')
+        ax5.set_title('Analysis Summary\n(Sionna Implementation)', fontweight='bold')
         
         plt.tight_layout()
         
