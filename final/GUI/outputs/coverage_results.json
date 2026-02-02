@@ -14,9 +14,9 @@
     "coverage_area_km2": 0.25,
     "total_points": 144,
     "throughput_statistics": {
-      "avg_mbps": 1492.623765281499,
-      "max_mbps": 1841.6006232660905,
-      "min_mbps": 1366.5306043093792
+      "avg_mbps": 1365.0523629813215,
+      "max_mbps": 1756.920973418644,
+      "min_mbps": 1225.586904153811
     },
     "los_analysis": {
       "los_percentage": 100.0,
@@ -33,23 +33,23 @@
   "optimization_results": {
     "total_points": 144,
     "coverage_area_km2": 0.25,
-    "avg_throughput_mbps": 1492.623765281499,
-    "max_throughput_mbps": 1841.6006232660905,
-    "min_throughput_mbps": 1366.5306043093792,
+    "avg_throughput_mbps": 1365.0523629813215,
+    "max_throughput_mbps": 1756.920973418644,
+    "min_throughput_mbps": 1225.586904153811,
     "los_percentage": 100.0,
     "los_points": 144,
     "nlos_points": 0,
-    "avg_throughput_los": 1492.623765281499,
+    "avg_throughput_los": 1365.0523629813215,
     "avg_throughput_nlos": 0.0,
     "los_advantage_db": 0.0,
     "coverage_10mbps_percent": 100.0,
     "coverage_20mbps_percent": 100.0,
     "coverage_50mbps_percent": 100.0,
-    "coverage_summary": "Cobertura promedio 1492.6 Mbps en 0.2 km\u00b2"
+    "coverage_summary": "Cobertura promedio 1365.1 Mbps en 0.2 km\u00b2"
   },
   "summary": {
     "coverage_area": "0.2 km\u00b2",
-    "avg_throughput": "1492.6 Mbps",
+    "avg_throughput": "1365.1 Mbps",
     "los_coverage": "100.0%",
     "quality_coverage": "100.0% >20Mbps",
     "recommended_config": "Grid 12x12 @ 40m altura"
