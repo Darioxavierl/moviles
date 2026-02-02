@@ -259,7 +259,7 @@ class CoverageAnalysisGUI:
         ax1.set_xlabel('Posición X [m]', fontweight='bold', fontsize=12)
         ax1.set_ylabel('Posición Y [m]', fontweight='bold', fontsize=12)
         ax1.set_title(f'Mapa de Throughput @ {self.munich_config["optimal_height"]}m altura\nGrid {self.munich_config["grid_resolution"]}x{self.munich_config["grid_resolution"]} Munich', 
-                     fontweight='bold', fontsize=14)
+                     fontweight='bold', fontsize=12)
         ax1.grid(True, alpha=0.4)
         
         # Add gNB position
@@ -276,7 +276,7 @@ class CoverageAnalysisGUI:
         ax2.set_xlabel('Posición X [m]', fontweight='bold', fontsize=12)
         ax2.set_ylabel('Posición Y [m]', fontweight='bold', fontsize=12)
         ax2.set_title('Mapa de Propagación LoS/NLoS\nCondiciones de Visibilidad Directa', 
-                     fontweight='bold', fontsize=14)
+                     fontweight='bold', fontsize=12)
         ax2.grid(True, alpha=0.4)
         ax2.scatter(0, 0, s=300, c='white', marker='s', edgecolors='black', linewidth=3)
         
@@ -295,7 +295,7 @@ class CoverageAnalysisGUI:
                           levels=20, cmap='viridis_r')
         ax3.set_xlabel('Posición X [m]', fontweight='bold', fontsize=12)
         ax3.set_ylabel('Posición Y [m]', fontweight='bold', fontsize=12)
-        ax3.set_title('Mapa de Path Loss\nPérdidas de Propagación', fontweight='bold', fontsize=14)
+        ax3.set_title('Mapa de Path Loss\nPérdidas de Propagación', fontweight='bold', fontsize=12)
         ax3.grid(True, alpha=0.4)
         ax3.scatter(0, 0, s=300, c='white', marker='s', edgecolors='black', linewidth=3)
         
@@ -307,7 +307,7 @@ class CoverageAnalysisGUI:
                           levels=20, cmap='plasma')
         ax4.set_xlabel('Posición X [m]', fontweight='bold', fontsize=12)
         ax4.set_ylabel('Posición Y [m]', fontweight='bold', fontsize=12)
-        ax4.set_title('Mapa de SNR\nRelación Señal/Ruido', fontweight='bold', fontsize=14)
+        ax4.set_title('Mapa de SNR\nRelación Señal/Ruido', fontweight='bold', fontsize=12)
         ax4.grid(True, alpha=0.4)
         ax4.scatter(0, 0, s=300, c='white', marker='s', edgecolors='black', linewidth=3)
         

@@ -403,9 +403,9 @@ class MobilityAnalysisGUI:
         ax1.scatter(*gnb_pos, s=300, c='red', marker='^', 
                    label='gNB', alpha=1.0, edgecolors='darkred')
         
-        ax1.set_xlabel('X [m]')
-        ax1.set_ylabel('Y [m]')
-        ax1.set_zlabel('Altura [m]')
+        ax1.set_xlabel('X [m]', fontweight='bold', fontsize=12)
+        ax1.set_ylabel('Y [m]', fontweight='bold', fontsize=12)
+        ax1.set_zlabel('Altura [m]', fontweight='bold', fontsize=12)
         ax1.set_title('Trayectorias 3D - Patrones de Movilidad\nComparación Visual', fontweight='bold')
         ax1.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
         ax1.grid(True, alpha=0.3)
@@ -418,8 +418,8 @@ class MobilityAnalysisGUI:
                     color=colors[i % len(colors)], linewidth=2, 
                     label=f"{result['name']}")
         
-        ax2.set_xlabel('Tiempo [s]', fontweight='bold')
-        ax2.set_ylabel('Throughput [Mbps]', fontweight='bold')
+        ax2.set_xlabel('Tiempo [s]', fontweight='bold', fontsize=12)
+        ax2.set_ylabel('Throughput [Mbps]', fontweight='bold', fontsize=12)
         ax2.set_title('Throughput vs Tiempo\nPerformance Temporal', fontweight='bold')
         ax2.grid(True, alpha=0.3)
         ax2.legend()
@@ -438,8 +438,8 @@ class MobilityAnalysisGUI:
             colors_bars.append(colors[i % len(colors)])
         
         bars = ax3.bar(range(len(pattern_names)), avg_throughputs, color=colors_bars, alpha=0.8)
-        ax3.set_ylabel('Throughput Promedio [Mbps]', fontweight='bold')
-        ax3.set_title('Comparación Performance\nThroughput Promedio por Patrón', fontweight='bold')
+        ax3.set_ylabel('Throughput Promedio [Mbps]', fontweight='bold', fontsize=12)
+        ax3.set_title('Comparación Performance\nThroughput Promedio por Patrón', fontweight='bold', fontsize=12)
         ax3.set_xticks(range(len(pattern_names)))
         ax3.set_xticklabels(pattern_names, rotation=45, ha='right')
         ax3.grid(True, alpha=0.3, axis='y')
@@ -488,7 +488,7 @@ Recomendación:
                 verticalalignment='top', fontfamily='monospace',
                 bbox=dict(boxstyle="round,pad=0.4", 
                 facecolor='lightblue', alpha=0.8))
-        ax4.set_title('Resumen de Resultados\n(Sionna Analysis)', fontweight='bold')
+        ax4.set_title('Resumen de Resultados\n(Sionna Analysis)', fontweight='bold', fontsize=12)
         
         # Main title
         fig.suptitle('ANÁLISIS MOVILIDAD UAV - Sistema 5G NR Munich\nComparación Patrones de Trayectoria', 

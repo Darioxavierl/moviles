@@ -442,8 +442,8 @@ class MIMOBeamformingGUI:
                          bbox=dict(boxstyle="round,pad=0.3", facecolor="lightblue", alpha=0.8))
             
             # Styling
-            ax.set_xlabel('X (metros)', fontweight='bold')
-            ax.set_ylabel('Y (metros)', fontweight='bold')
+            ax.set_xlabel('X [m]', fontweight='bold', fontsize=12)
+            ax.set_ylabel('Y [m]', fontweight='bold', fontsize=12)
             ax.set_zlabel('Z (metros)', fontweight='bold')
             ax.set_title('Munich 3D Urban Scenario - Sionna Ray Tracing\n7 Paths + MIMO Analysis', 
                         fontweight='bold', fontsize=14)
@@ -499,8 +499,8 @@ class MIMOBeamformingGUI:
         colors = ['lightblue', 'skyblue', 'steelblue', 'darkblue', 'navy'][:len(configs)]
         
         bars = ax1.bar(configs, throughputs, color=colors, alpha=0.8)
-        ax1.set_ylabel('Throughput (Mbps)', fontweight='bold')
-        ax1.set_title('MIMO Configurations\n(Sionna Ray Tracing)', fontweight='bold')
+        ax1.set_ylabel('Throughput (Mbps)', fontweight='bold', fontsize=12)
+        ax1.set_title('MIMO Configurations\n(Sionna Ray Tracing)', fontweight='bold', fontsize=12)
         ax1.tick_params(axis='x', rotation=45)
         ax1.grid(True, alpha=0.3)
         
@@ -520,9 +520,9 @@ class MIMOBeamformingGUI:
             ax2.plot(data['snr_range'], data['throughput_mbps'], 
                     'o-', linewidth=2, color=colors_bf[i % len(colors_bf)], label=label)
         
-        ax2.set_xlabel('SNR (dB)', fontweight='bold')
-        ax2.set_ylabel('Throughput (Mbps)', fontweight='bold')
-        ax2.set_title('Beamforming Strategies vs SNR\n(Sionna Channel)', fontweight='bold')
+        ax2.set_xlabel('SNR (dB)', fontweight='bold', fontsize=12)
+        ax2.set_ylabel('Throughput (Mbps)', fontweight='bold', fontsize=12)
+        ax2.set_title('Beamforming Strategies vs SNR\n(Sionna Channel)', fontweight='bold', fontsize=12)
         ax2.grid(True, alpha=0.3)
         ax2.legend(fontsize=9)
         
@@ -531,8 +531,8 @@ class MIMOBeamformingGUI:
         
         spectral_effs = [mimo_results[c].get('spectral_efficiency', 0) for c in configs]
         bars3 = ax3.bar(configs, spectral_effs, color='lightgreen', alpha=0.7)
-        ax3.set_ylabel('Spectral Efficiency (bits/s/Hz)', fontweight='bold')
-        ax3.set_title('MIMO Spectral Efficiency\n(Sionna RT)', fontweight='bold')
+        ax3.set_ylabel('Spectral Efficiency (bits/s/Hz)', fontweight='bold', fontsize=12)
+        ax3.set_title('MIMO Spectral Efficiency\n(Sionna RT)', fontweight='bold', fontsize=12)
         ax3.tick_params(axis='x', rotation=45)
         ax3.grid(True, alpha=0.3)
         
@@ -586,9 +586,9 @@ class MIMOBeamformingGUI:
                 'g--', linewidth=3, alpha=0.8, label='RF Communication Link')
         
         # Configurar ejes y vista
-        ax4.set_xlabel('X (metros)', fontweight='bold')
-        ax4.set_ylabel('Y (metros)', fontweight='bold')
-        ax4.set_zlabel('Z (metros)', fontweight='bold')
+        ax4.set_xlabel('X [m]', fontweight='bold', fontsize=12)
+        ax4.set_ylabel('Y [m]', fontweight='bold', fontsize=12)
+        ax4.set_zlabel('Z [m]', fontweight='bold', fontsize=12)
         ax4.set_title('🏙️ Munich Urban Scenario\n📡 Sionna Ray Tracing', fontweight='bold', fontsize=12)
         
         # Configurar límites para mejor visualización
@@ -641,7 +641,7 @@ SIONNA RT ANALYSIS SUMMARY
         ax5.set_xlim(0, 1)
         ax5.set_ylim(0, 1)
         ax5.axis('off')
-        ax5.set_title('Analysis Summary\n(Sionna Implementation)', fontweight='bold')
+        ax5.set_title('Analysis Summary\n(Sionna Implementation)', fontweight='bold', fontsize=12)
         
         plt.tight_layout()
         

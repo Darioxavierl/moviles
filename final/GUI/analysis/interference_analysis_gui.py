@@ -361,9 +361,9 @@ class InterferenceAnalysisGUI:
         ax1.scatter(*gnb_pos, s=400, c='red', marker='^', 
                    label='gNB', alpha=1.0, edgecolors='darkred')
         
-        ax1.set_xlabel('X [m]')
-        ax1.set_ylabel('Y [m]')
-        ax1.set_zlabel('Altura [m]')
+        ax1.set_xlabel('X [m]', fontweight='bold', fontsize=12)
+        ax1.set_ylabel('Y [m]', fontweight='bold', fontsize=12)
+        ax1.set_zlabel('Altura [m]', fontweight='bold', fontsize=12)
         ax1.set_title('Posiciones UAV - Escenarios Interferencia\nDistribución Espacial Multi-Scenario', fontweight='bold')
         ax1.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=8)
         ax1.grid(True, alpha=0.3)
@@ -380,8 +380,8 @@ class InterferenceAnalysisGUI:
         bars2 = ax2.bar(x_pos + 0.2, min_sinrs, 0.4, label='SINR Mínimo', 
                        color=colors[:len(scenario_names)], alpha=0.5)
         
-        ax2.set_ylabel('SINR [dB]', fontweight='bold')
-        ax2.set_title('Comparación SINR por Escenario\nCalidad de Señal vs Interferencia', fontweight='bold')
+        ax2.set_ylabel('SINR [dB]', fontweight='bold', fontsize=12)
+        ax2.set_title('Comparación SINR por Escenario\nCalidad de Señal vs Interferencia', fontweight='bold', fontsize=12)
         ax2.set_xticks(x_pos)
         ax2.set_xticklabels(scenario_names, rotation=45, ha='right')
         ax2.legend()
@@ -404,9 +404,9 @@ class InterferenceAnalysisGUI:
         line = ax3_twin.plot(x_pos, avg_throughputs, 'ro-', linewidth=3, markersize=8, 
                             label='Throughput Promedio por UAV')
         
-        ax3.set_ylabel('Throughput Total [Mbps]', fontweight='bold')
-        ax3_twin.set_ylabel('Throughput Promedio [Mbps]', fontweight='bold', color='red')
-        ax3.set_title('Análisis Throughput Multi-UAV\nCapacidad Total vs Individual', fontweight='bold')
+        ax3.set_ylabel('Throughput Total [Mbps]', fontweight='bold', fontsize=12)
+        ax3_twin.set_ylabel('Throughput Promedio [Mbps]', fontweight='bold', color='red', fontsize=12)
+        ax3.set_title('Análisis Throughput Multi-UAV\nCapacidad Total vs Individual', fontweight='bold', fontsize=12)
         ax3.set_xticks(x_pos)
         ax3.set_xticklabels(scenario_names, rotation=45, ha='right')
         ax3.grid(True, alpha=0.3)
@@ -435,8 +435,8 @@ class InterferenceAnalysisGUI:
             patch.set_facecolor(color)
             patch.set_alpha(0.7)
         
-        ax4.set_ylabel('Throughput Individual [Mbps]', fontweight='bold')
-        ax4.set_title('Análisis de Equidad (Fairness)\nDistribución Throughput por Escenario', fontweight='bold')
+        ax4.set_ylabel('Throughput Individual [Mbps]', fontweight='bold', fontsize=12)
+        ax4.set_title('Análisis de Equidad (Fairness)\nDistribución Throughput por Escenario', fontweight='bold', fontsize=12)
         ax4.tick_params(axis='x', rotation=45)
         ax4.grid(True, alpha=0.3)
         
@@ -481,7 +481,7 @@ Recomendación:
                 verticalalignment='top', fontfamily='monospace',
                 bbox=dict(boxstyle="round,pad=0.4", 
                 facecolor='lightcyan', alpha=0.8))
-        ax5.set_title('Resumen de Resultados\n(Sionna Multi-UAV)', fontweight='bold')
+        ax5.set_title('Resumen de Resultados\n(Sionna Multi-UAV)', fontweight='bold', fontsize=12)
         
         # Main title
         fig.suptitle('ANÁLISIS INTERFERENCIA MULTI-UAV - Sistema 5G NR Munich\nOptimización SINR y Gestión de Recursos', 

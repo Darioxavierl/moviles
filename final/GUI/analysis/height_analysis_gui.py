@@ -383,7 +383,7 @@ class HeightAnalysisGUI:
         ax1.set_xlabel('Altura UAV [m]', fontweight='bold', fontsize=12)
         ax1.set_ylabel('Throughput [Mbps]', fontweight='bold', fontsize=12)
         title_suffix = "Sionna RT" if any(results.get('uses_sionna', [False])) else "Analítico"
-        ax1.set_title(f'Throughput vs Altura UAV\nMIMO 64x4 ({title_suffix})', fontweight='bold', fontsize=14)
+        ax1.set_title(f'Throughput vs Altura UAV\nMIMO 64x4 ({title_suffix})', fontweight='bold', fontsize=12)
         ax1.grid(True, alpha=0.4)
         
         # Highlight optimal point
@@ -400,14 +400,14 @@ class HeightAnalysisGUI:
         ax2.plot(heights, results['path_loss_db'], 'r-s', linewidth=2.5, markersize=6)
         ax2.set_xlabel('Altura UAV [m]', fontweight='bold', fontsize=12)
         ax2.set_ylabel('Path Loss [dB]', fontweight='bold', fontsize=12)
-        ax2.set_title('Path Loss vs Altura', fontweight='bold', fontsize=14)
+        ax2.set_title('Path Loss vs Altura', fontweight='bold', fontsize=12)
         ax2.grid(True, alpha=0.4)
         
         # Plot 3: LoS Probability vs Height
         ax3.plot(heights, results['los_probability'], 'g-^', linewidth=2.5, markersize=6)
         ax3.set_xlabel('Altura UAV [m]', fontweight='bold', fontsize=12)
         ax3.set_ylabel('Probabilidad LoS', fontweight='bold', fontsize=12)
-        ax3.set_title('Probabilidad LoS vs Altura', fontweight='bold', fontsize=14)
+        ax3.set_title('Probabilidad LoS vs Altura', fontweight='bold', fontsize=12)
         ax3.set_ylim([0, 1.1])
         ax3.grid(True, alpha=0.4)
         
@@ -419,7 +419,7 @@ class HeightAnalysisGUI:
         ax4.plot(heights, results['snr_db'], 'm-d', linewidth=2.5, markersize=6)
         ax4.set_xlabel('Altura UAV [m]', fontweight='bold', fontsize=12)
         ax4.set_ylabel('SNR [dB]', fontweight='bold', fontsize=12)
-        ax4.set_title('SNR vs Altura', fontweight='bold', fontsize=14)
+        ax4.set_title('SNR vs Altura', fontweight='bold', fontsize=12)
         ax4.grid(True, alpha=0.4)
         
         # Add SNR threshold lines

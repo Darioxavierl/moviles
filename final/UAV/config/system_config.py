@@ -9,7 +9,7 @@ import numpy as np
 # =============================================================================
 class RFConfig:
     """Configuración de parámetros RF"""
-    FREQUENCY = 3.5e9           # 3.5 GHz (5G NR band n78)
+    FREQUENCY = 7.125e9           # 3.5 GHz (5G NR band n78)
     BANDWIDTH = 100e6           # 100 MHz
     TX_POWER_GNB = 43          # 43 dBm (20W) para gNB
     TX_POWER_UAV = 23          # 23 dBm (200mW) para UAV

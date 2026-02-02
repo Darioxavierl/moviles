@@ -20,7 +20,7 @@
       200,
       50
     ],
-    "frequency_ghz": 3.5,
+    "frequency_ghz": 7.125,
     "bandwidth_mhz": 100,
     "uses_sionna_rt": true
   },
