@@ -56,12 +56,12 @@ Analiza el rendimiento de diferentes configuraciones de antenas MIMO masivo y es
 - **Ray paths**: 7 paths reales calculados por Sionna RT
 
 ### 📈 **Gráficas que Devuelve**
-**Tab "Gráficos y Resultados":**
-1. **MIMO Throughput**: Barras con valores Sionna reales por configuración
-2. **Beamforming vs SNR**: 5 curvas con throughput real 0-30dB
-3. **Spectral Efficiency**: Barras de eficiencia espectral MIMO (bits/s/Hz)
-4. **Munich 3D Scenario**: Visualización 3D con gNB, UAV y 6 edificios
-5. **Performance Summary**: Resumen de mejores configuraciones Sionna RT
+**Tab "Gráficos y Resultados" (5 gráficos en layout 2×3):**
+1. **MIMO Throughput** (Arriba Izq): Barras comparativas con valores Sionna reales por configuración
+2. **Beamforming vs SNR** (Arriba Centro): 5 curvas de estrategias vs SNR (0-30dB)
+3. **Spectral Efficiency** (Arriba Derecha): Barras de eficiencia espectral (bits/s/Hz)
+4. **Munich 3D Scenario** (Abajo Izq): Visualización 3D con gNB, UAV y 6 edificios
+5. **Performance Summary** (Abajo Derecha): Resumen con mejores configuraciones MIMO + Beamforming
 
 **Tab "Escena 3D":**
 - **✅ Escenario Munich 3D** con 6 edificios urbanos realistas
@@ -71,7 +71,7 @@ Analiza el rendimiento de diferentes configuraciones de antenas MIMO masivo y es
 - **✅ Channel overlays**: Información del canal (-37.9 dB gain, 16 streams)
 - **✅ Beamforming info**: Mejor estrategia SVD con 7.0 dB ganancia
 - **✅ Terreno urbano**: Plano base con perspectiva 3D optimizada
-- **✅ Link visualization**: Enlace RF gNB→UAV en verde punteado
+- **✅ Link visualization**: Enlace RF gNB→UAV en rojo directo + reflexiones coloreadas
 
 **Resultado típico**: 37.2 Mbps (MIMO_16x8) + 75.8 Mbps (SVD beamforming) **con visualización 3D completa del ray tracing Munich**
 
