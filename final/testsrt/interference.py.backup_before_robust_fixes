@@ -1,0 +1,973 @@
+"""
+System-Level 5G NR Interference Analysis with Sionna SYS
+=========================================================
+Compares interference impact under sparse vs. dense UAV scenarios
+Using Sionna Ray Tracing for accurate channel modeling + SYS for scheduling/link adaptation
+"""
+
+import tensorflow as tf
+import numpy as np
+import sionna
+from sionna.rt import Transmitter, Receiver, PathSolver, PlanarArray, load_scene, Camera
+from sionna.sys import (
+    get_pathloss, PFSchedulerSUMIMO, EESM, 
+    OuterLoopLinkAdaptation, PHYAbstraction,
+    open_loop_uplink_power_control
+)
+import matplotlib.pyplot as plt
+import traceback
+import os
+
+tf.get_logger().setLevel("INFO")
+
+print("\n" + "="*80)
+print("INTERFERENCE SIMULATOR - Sparse vs Dense UAV Scenarios")
+print("="*80)
+
+########################################
+# LAYER 1: CONFIGURATION
+########################################
+
+class RF_Config:
+    """5G NR RF configuration for system-level simulation"""
+    CARRIER_FREQUENCY = 3.5e9          # Band n78
+    BANDWIDTH = 100e6                  # 100 MHz for SYS simulation
+    SUBCARRIER_SPACING = 15e3          # 15 kHz
+    NUM_SUBCARRIERS = int(BANDWIDTH / SUBCARRIER_SPACING)  # 6667
+    NUM_RBS = int(NUM_SUBCARRIERS / 12)  # 3GPP: RB = 12 SC → ~556 RBs
+    SLOT_DURATION = 1e-3               # 1 ms per slot
+    NUM_TIME_SLOTS = 100               # 100 slots = 100 ms simulation
+    
+    # MIMO Configuration
+    TX_ROWS, TX_COLS = 4, 4            # 4x4 TX array at gNB
+    RX_ROWS, RX_COLS = 4, 4            # 4x4 RX array at UE/UAV
+    POLARIZATION = "VH"                # Dual polarization (V+H)
+    ANTENNA_SPACING = 0.5              # 0.5 wavelength
+    
+    # Channel parameters
+    NOISE_FIGURE_DB = 7.0              # Typical UE noise figure
+    TARGET_BLER = 0.1                  # 10% BLER target for link adaptation
+    
+    print(f"\n[RF_Config] NUM_RBS = {NUM_RBS}, NUM_SUBCARRIERS = {NUM_SUBCARRIERS}")
+
+
+class ScenarioConfig_Sparse:
+    """Sparse scenario: 4-5 UAVs, low interference"""
+    NUM_USERS = 5
+    GNB_POSITION = [110, 70, 20]       # gNB at center, low altitude
+    UAV_HEIGHT_MIN = 30                # Minimum altitude
+    UAV_HEIGHT_MAX = 80                # Maximum altitude
+    UAV_AREA_X = [50, 250]             # X area coverage
+    UAV_AREA_Y = [50, 300]             # Y area coverage
+    CHANNEL_MODEL = "Rician"           # K-factor from ray tracing
+    SNAPSHOT_PERIOD = 10               # Update channel every 10 slots
+    NAME = "SPARSE"
+
+
+class ScenarioConfig_Dense:
+    """Dense scenario: 12-15 UAVs, significant interference"""
+    NUM_USERS = 15
+    GNB_POSITION = [110, 70, 20]       # Same gNB position
+    UAV_HEIGHT_MIN = 30
+    UAV_HEIGHT_MAX = 80
+    UAV_AREA_X = [50, 250]
+    UAV_AREA_Y = [50, 300]
+    CHANNEL_MODEL = "Rician"
+    SNAPSHOT_PERIOD = 10               # Update channel every 10 slots
+    NAME = "DENSE"
+
+
+########################################
+# LAYER 2: SCENE & POSITIONING
+########################################
+
+class InterferenceSimulator:
+    """Main simulator class for system-level interference analysis"""
+    
+    def __init__(self, scenario_config, scenario_name="test"):
+        """
+        Initialize simulator with scenario configuration
+        
+        Args:
+            scenario_config: ScenarioConfig_Sparse or ScenarioConfig_Dense
+            scenario_name: Name for logging
+        """
+        self.config = scenario_config
+        self.scenario_name = scenario_name
+        
+        # Scene and positioning
+        self.scene = None
+        self.tx = None
+        self.rxs = []                   # List of Receiver objects
+        self.ue_positions = None        # [num_users, 3]
+        
+        # Channel storage
+        self.h_freq = None              # [num_users, num_tx_ant, num_subcarriers]
+        self.path_loss_db = None        # [num_users]
+        
+        # Scheduler
+        self.scheduler = None
+        self.last_sinr_db = None
+        
+        # Results storage
+        self.results = {
+            'throughput_per_user': [],
+            'sinr_per_user': [],
+            'path_loss_per_user': [],
+            'mcs_per_user': [],
+            'bler_per_user': [],
+        }
+        
+        print(f"\n[InterferenceSimulator] Initialized for scenario: {scenario_config.NAME} ({scenario_config.NUM_USERS} users)")
+        
+        # Setup scene
+        self.setup_scene()
+        
+        # Generate UE positions
+        self.generate_ue_positions()
+        
+        print(f"[InterferenceSimulator] ✓ Scene and UE positioning complete")
+    
+    def setup_scene(self):
+        """Load Sionna Munich scene and configure TX/RX arrays"""
+        print("\n[setup_scene] Loading Sionna Munich 3D scene...")
+        
+        try:
+            # Load scene
+            self.scene = load_scene(sionna.rt.scene.munich)
+            self.scene.frequency = RF_Config.CARRIER_FREQUENCY
+            print(f"  ✓ Scene frequency: {RF_Config.CARRIER_FREQUENCY/1e9:.1f} GHz")
+            
+            # TX array at gNB (4x4 massive MIMO)
+            self.scene.tx_array = PlanarArray(
+                num_rows=RF_Config.TX_ROWS,
+                num_cols=RF_Config.TX_COLS,
+                vertical_spacing=RF_Config.ANTENNA_SPACING,
+                horizontal_spacing=RF_Config.ANTENNA_SPACING,
+                pattern="tr38901",
+                polarization=RF_Config.POLARIZATION
+            )
+            print(f"  ✓ TX array: {RF_Config.TX_ROWS}x{RF_Config.TX_COLS} (VH polarization)")
+            
+            # RX array at UE/UAV
+            self.scene.rx_array = PlanarArray(
+                num_rows=RF_Config.RX_ROWS,
+                num_cols=RF_Config.RX_COLS,
+                vertical_spacing=RF_Config.ANTENNA_SPACING,
+                horizontal_spacing=RF_Config.ANTENNA_SPACING,
+                pattern="tr38901",
+                polarization=RF_Config.POLARIZATION
+            )
+            print(f"  ✓ RX array: {RF_Config.RX_ROWS}x{RF_Config.RX_COLS} (VH polarization)")
+            
+            # Create TX (gNB at fixed position)
+            gnb_pos = np.array(self.config.GNB_POSITION, dtype=np.float32)
+            self.tx = Transmitter(name="gNB", position=gnb_pos)
+            self.scene.add(self.tx)
+            print(f"  ✓ gNB position: {gnb_pos}")
+            
+        except Exception as e:
+            print(f"  ✗ Error loading scene: {e}")
+            traceback.print_exc()
+            raise
+    
+    def generate_ue_positions(self):
+        """Generate random UAV positions in scenario area"""
+        print(f"\n[generate_ue_positions] Generating {self.config.NUM_USERS} UAV positions...")
+        
+        np.random.seed(42)  # Reproducible
+        positions = []
+        
+        for i in range(self.config.NUM_USERS):
+            x = np.random.uniform(self.config.UAV_AREA_X[0], self.config.UAV_AREA_X[1])
+            y = np.random.uniform(self.config.UAV_AREA_Y[0], self.config.UAV_AREA_Y[1])
+            z = np.random.uniform(self.config.UAV_HEIGHT_MIN, self.config.UAV_HEIGHT_MAX)
+            positions.append([x, y, z])
+        
+        self.ue_positions = np.array(positions, dtype=np.float32)
+        
+        # Create Receiver objects and add to scene
+        self.rxs = []
+        for i, pos in enumerate(self.ue_positions):
+            try:
+                rx = Receiver(name=f"UE_{i}", position=pos)
+                self.scene.add(rx)
+                self.rxs.append(rx)
+            except Exception as e:
+                print(f"  ✗ Error adding UE_{i}: {e}")
+        
+        print(f"  ✓ {len(self.rxs)} UAVs added to scene")
+        print(f"  Position range:")
+        print(f"    X: [{np.min(self.ue_positions[:, 0]):.1f}, {np.max(self.ue_positions[:, 0]):.1f}]")
+        print(f"    Y: [{np.min(self.ue_positions[:, 1]):.1f}, {np.max(self.ue_positions[:, 1]):.1f}]")
+        print(f"    Z: [{np.min(self.ue_positions[:, 2]):.1f}, {np.max(self.ue_positions[:, 2]):.1f}]")
+    
+    ########################################
+    # LAYER 3: RAY TRACING
+    ########################################
+    
+    def compute_channel_snapshot(self):
+        """
+        Extract channel matrices via Ray Tracing for ALL users simultaneously
+        
+        Returns:
+            h_freq: [num_users, num_tx_antennas*polarization, num_subcarriers] complex64
+            path_loss_db: [num_users] float
+            valid: bool (True if successful)
+        """
+        try:
+            print(f"\n[compute_channel_snapshot] Extracting channels via PathSolver...")
+            
+            # Make TX look at each RX
+            for rx in self.rxs:
+                self.tx.look_at(rx)
+            
+            # Compute all paths simultaneously
+            paths = PathSolver()(self.scene)
+            if paths is None:
+                print("  ✗ PathSolver returned None")
+                return None, None, False
+            
+            print(f"  ✓ Paths computed for {len(self.rxs)} users")
+            
+            print(f"  ✓ Paths computed for {len(self.rxs)} users")
+            
+            # Extract CFR at multiple frequencies
+            num_subcarriers = min(RF_Config.NUM_SUBCARRIERS, 512)  # Limit for memory
+            freq_start = RF_Config.CARRIER_FREQUENCY - (num_subcarriers//2) * RF_Config.SUBCARRIER_SPACING
+            freq_end = RF_Config.CARRIER_FREQUENCY + (num_subcarriers//2 - 1) * RF_Config.SUBCARRIER_SPACING
+            
+            frequencies = tf.linspace(freq_start, freq_end, num_subcarriers)
+            print(f"  ✓ Frequencies: {num_subcarriers} subcarriers ({freq_start/1e9:.3f} - {freq_end/1e9:.3f} GHz)")
+            
+            # CFR: [num_users, num_tx, num_rx, num_subcarriers, num_paths]
+            # We use normalize=False to get actual channel values
+            cfr = paths.cfr(frequencies=frequencies, normalize=False, out_type="tf")
+            print(f"  ✓ CFR shape: {cfr.shape}")
+            
+            # Average over paths (multiple propagation paths) → [num_users, num_tx, num_rx, num_subcarriers]
+            # Take first path (strongest)
+            h_freq = cfr[:, :, :, :, 0]  # [num_users, num_tx, num_rx, num_subcarriers]
+            print(f"  ✓ h_freq (post-path-reduction): {h_freq.shape}")
+            
+            # Swap axes to get [num_users, num_tx, num_subcarriers] (reduce RX to single value)
+            # Average over RX antennas (we care about RX side seeing TX signal)
+            h_freq = tf.reduce_mean(h_freq, axis=2)  # [num_users, num_tx, num_subcarriers]
+            print(f"  ✓ h_freq (post-RX-reduction): {h_freq.shape}")
+            
+            # Ensure proper type
+            h_freq = tf.cast(h_freq, tf.complex64)
+            
+            # Extract path loss manually (get_pathloss expects different format)
+            # Path loss = 10*log10(sum_of_channel_powers) in dB
+            # For each user: sum channel power across all TX antennas and subcarriers
+            channel_power = tf.reduce_sum(tf.abs(h_freq) ** 2, axis=[1, 2])  # [num_users]
+            channel_power_db = 10.0 * tf.math.log(channel_power + 1e-12) / tf.math.log(10.0)
+            
+            # TX power assumption for normalization
+            tx_power_dbm = 35.0  # dBm
+            tx_power_linear = 10.0 ** ((tx_power_dbm - 30.0) / 10.0)
+            
+            # Path loss = TX power - RX power (after channel)
+            # Simplified: path loss ≈ -10*log10(channel_power / tx_power)
+            path_loss_db = -channel_power_db + 10.0 * tf.math.log(tf.cast(tx_power_linear, tf.float32) + 1e-12) / tf.math.log(10.0)
+            path_loss_db = tf.cast(path_loss_db, tf.float32).numpy()
+            
+            # Clip to realistic values
+            path_loss_db = np.clip(path_loss_db, 50, 150)
+            
+            print(f"  ✓ Path loss extracted: {path_loss_db.shape}")
+            print(f"    Range: {np.min(path_loss_db):.1f} - {np.max(path_loss_db):.1f} dB")
+            
+            self.h_freq = h_freq
+            self.path_loss_db = path_loss_db
+            
+            return h_freq, path_loss_db, True
+            
+        except Exception as e:
+            print(f"  ✗ Ray tracing error: {e}")
+            traceback.print_exc()
+            return None, None, False
+    
+    ########################################
+    # LAYER 4: SCHEDULING (Proportional Fair)
+    ########################################
+    
+    def schedule_resources(self, slot_index):
+        """
+        Schedule resources using Proportional Fair scheduler
+        Simplified implementation: equal RB distribution (fallback to keep moving)
+        
+        Args:
+            slot_index: Current time slot index
+            
+        Returns:
+            scheduling: [num_users, num_rbs] binary matrix (1=scheduled, 0=not scheduled)
+        """
+        try:
+            num_users = len(self.rxs)
+            num_rbs = RF_Config.NUM_RBS
+            
+            # Proportional Fair: allocate RBs proportionally to channel quality
+            # For now, use equal distribution (real PF would use metrics)
+            # TODO: Integrate PFSchedulerSUMIMO once API is clear
+            
+            scheduling = np.zeros([num_users, num_rbs], dtype=np.float32)
+            
+            # Equal RB distribution
+            rbs_per_user = num_rbs // num_users
+            remainder = num_rbs % num_users
+            
+            for u in range(num_users):
+                start_rb = u * rbs_per_user + min(u, remainder)
+                end_rb = start_rb + rbs_per_user + (1 if u < remainder else 0)
+                scheduling[u, start_rb:end_rb] = 1.0
+            
+            return scheduling
+            
+        except Exception as e:
+            print(f"  ✗ Scheduling error: {e}")
+            traceback.print_exc()
+            # Fallback: equal RB distribution
+            num_users = len(self.rxs)
+            num_rbs = RF_Config.NUM_RBS
+            scheduling = np.zeros([num_users, num_rbs], dtype=np.float32)
+            rbs_per_user = num_rbs // num_users
+            for i in range(num_users):
+                start_rb = i * rbs_per_user
+                end_rb = start_rb + rbs_per_user if i < num_users - 1 else num_rbs
+                scheduling[i, start_rb:end_rb] = 1.0
+            return scheduling
+    
+    ########################################
+    # LAYER 5: POWER CONTROL
+    ########################################
+    
+    def compute_tx_power(self, path_loss_db, scheduling):
+        """
+        Compute TX power using open-loop control based on path loss
+        
+        Args:
+            path_loss_db: [num_users, num_subcarriers] path loss in dB
+            scheduling: [num_users, num_rbs] resource allocation
+            
+        Returns:
+            tx_power_dbm: [num_users] TX power in dBm
+        """
+        try:
+            num_users = len(self.rxs)
+            
+            # Average path loss per user across subcarriers
+            path_loss_avg = np.mean(path_loss_db, axis=1)  # [num_users]
+            
+            # Target received power at gNB (typical uplink: -80 to -100 dBm)
+            # Higher target = needs more TX power
+            target_rx_power_dbm = -90  # dBm (typical for uplink)
+            
+            # TX power = target_rx - path_loss + headroom
+            # Note: path_loss is positive, so we ADD it to target
+            # Formula: P_tx = P_rx_target + PL
+            tx_power_dbm = target_rx_power_dbm + path_loss_avg + 5  # 5 dB headroom
+            
+            # Clip to realistic UE power levels (0-24 dBm, typical max 23 dBm)
+            tx_power_dbm = np.clip(tx_power_dbm, 0, 23)
+            
+            return tx_power_dbm
+            
+        except Exception as e:
+            print(f"  ✗ Power control error: {e}")
+            # Fallback: maximum power
+            return np.full(len(self.rxs), 20.0)
+    
+    ########################################
+    # LAYER 6-8: SINR CALCULATION + LINK ADAPTATION + PHY ABSTRACTION
+    ########################################
+    
+    def compute_sinr_and_throughput(self, h_freq, path_loss_db, tx_power_dbm, scheduling):
+        """
+        Compute SINR per user using multi-subcarrier/multi-layer aggregation (EESM)
+        Then select MCS and compute throughput
+        
+        Args:
+            h_freq: [num_users, num_tx_ant, num_subcarriers] channel
+            path_loss_db: [num_users, num_subcarriers] path loss per subcarrier
+            tx_power_dbm: [num_users] TX power
+            scheduling: [num_users, num_rbs] resource allocation
+            
+        Returns:
+            sinr_db: [num_users] effective SINR
+            mcs_indices: [num_users] MCS selection
+            throughput_mbps: [num_users] throughput in Mbps
+        """
+        try:
+            num_users = len(self.rxs)
+            num_subcarriers = h_freq.shape[-1]
+            
+            # Ensure shapes are correct
+            assert h_freq.shape[0] == num_users
+            assert path_loss_db.shape[0] == num_users
+            assert tx_power_dbm.shape[0] == num_users
+            
+            # Noise power calculation (correct)
+            nf_db = RF_Config.NOISE_FIGURE_DB
+            # Noise PSD: -174 dBm/Hz + NF + 10*log10(BW)
+            noise_psd_dbm_per_hz = -174  # dBm/Hz
+            noise_power_dbm_total = noise_psd_dbm_per_hz + 10 * np.log10(RF_Config.BANDWIDTH) + nf_db  # dBm total
+            noise_power_w = 10 ** ((noise_power_dbm_total - 30) / 10)  # Convert dBm to Watts correctly
+            
+            # Debug: print noise power
+            # print(f"  [DEBUG] Noise power: {noise_power_dbm_total:.1f} dBm = {noise_power_w:.3e} W")
+            
+            sinr_db_all = []
+            mcs_indices_all = []
+            throughput_all = []
+            
+            for u in range(num_users):
+                # Average path loss across subcarriers for this user (in dB)
+                path_loss_avg_db = np.mean(path_loss_db[u, :])
+                
+                # Simple SINR calculation
+                # RX_power_dBm = TX_power_dBm - Path_Loss_dB
+                rx_power_dbm = float(tx_power_dbm[u] - path_loss_avg_db)
+                rx_power_w = 10 ** ((rx_power_dbm - 30) / 10)  # Convert to Watts
+                
+                # SINR = RX_Power / (Noise + Interference)
+                sinr_linear = rx_power_w / (noise_power_w + 1e-15)  # Initially no interference
+                sinr_db_no_int = 10 * np.log10(sinr_linear + 1e-12)
+                
+                # Add interference from other users on overlapping RBs
+                interference_dbm = -200  # Start with very low interference
+                for u2 in range(num_users):
+                    if u2 == u:
+                        continue
+                    # Check overlap in RBs
+                    overlap_rbs = float(np.sum(scheduling[u, :] * scheduling[u2, :]))
+                    if overlap_rbs > 0:
+                        # Interferer's RX power at this location (same path loss approximation)
+                        path_loss_u2_db = np.mean(path_loss_db[u2, :])
+                        tx_pw_u2_dbm = float(tx_power_dbm[u2])
+                        
+                        # Interferer's RX power at receiver location (simplified: same path loss)
+                        rx_power_u2_dbm = tx_pw_u2_dbm - path_loss_u2_db
+                        
+                        # Fraction of interference based on RB overlap
+                        overlap_fraction = overlap_rbs / (np.sum(scheduling[u, :]) + 1e-6)
+                        
+                        # Accumulate interference (in linear scale)
+                        rx_power_u2_w = 10 ** ((rx_power_u2_dbm - 30) / 10)
+                        interference_power_this = rx_power_u2_w * overlap_fraction * 0.5  # 0.5 = interference factor
+                        
+                        # Accumulate in dB
+                        if interference_dbm < -150:
+                            interference_dbm = 10 * np.log10(interference_power_this + 1e-15) + 30
+                        else:
+                            interference_w = 10 ** ((interference_dbm - 30) / 10)
+                            total_interference_w = interference_w + interference_power_this
+                            interference_dbm = 10 * np.log10(total_interference_w + 1e-15) + 30
+                
+                # Convert interference to watts
+                if interference_dbm > -150:
+                    interference_w = 10 ** ((interference_dbm - 30) / 10)
+                else:
+                    interference_w = 1e-15
+                
+                # Final SINR with interference
+                sinr_linear = rx_power_w / (noise_power_w + interference_w + 1e-15)
+                sinr_db = 10 * np.log10(sinr_linear + 1e-12)
+                sinr_db = float(np.clip(sinr_db, -20, 50))  # Clip to reasonable range (-20 to +50 dB)
+                
+                sinr_db_all.append(sinr_db)
+                
+                # LAYER 7: MCS Selection (simplified)
+                mcs_lut = np.array([-10, -8, -6, -4, -2, 0, 2, 4, 6, 8, 10, 12, 14, 16, 18,
+                                   20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44])
+                mcs_idx = int(np.searchsorted(mcs_lut, sinr_db))
+                mcs_idx = int(np.clip(mcs_idx, 0, 27))
+                mcs_indices_all.append(mcs_idx)
+                
+                # LAYER 8: PHY Abstraction (Spectral Efficiency from MCS)
+                se_per_mcs = np.array([0.23, 0.31, 0.38, 0.44, 0.51, 0.61, 0.71, 0.81, 0.90, 1.00,
+                                      1.21, 1.41, 1.61, 1.81, 1.91, 2.21, 2.41, 2.61, 2.81, 3.01,
+                                      3.31, 3.61, 3.91, 4.21, 4.51, 4.81, 5.11, 5.41])
+                
+                se = float(se_per_mcs[min(mcs_idx, len(se_per_mcs)-1)])
+                
+                # BLER penalty (simplified)
+                mcs_threshold_sinr = float(mcs_lut[min(mcs_idx, len(mcs_lut)-1)])
+                margin = sinr_db - mcs_threshold_sinr
+                if margin > 5:
+                    bler = 1e-4
+                elif margin > 2:
+                    bler = 0.01
+                elif margin > 0:
+                    bler = 0.05
+                elif margin > -2:
+                    bler = 0.1
+                else:
+                    bler = 0.5
+                
+                # Effective SE after retransmissions
+                se_effective = se * (1 - bler)
+                
+                # Throughput = SE × allocated_bandwidth
+                num_rbs_allocated = float(np.sum(scheduling[u, :]))
+                bw_allocated_hz = num_rbs_allocated * 12 * RF_Config.SUBCARRIER_SPACING
+                
+                throughput = se_effective * bw_allocated_hz / 1e6  # Mbps
+                throughput_all.append(throughput)
+            
+            return np.array(sinr_db_all), np.array(mcs_indices_all, dtype=int), np.array(throughput_all)
+            
+        except Exception as e:
+            print(f"  ✗ SINR/Throughput calculation error: {e}")
+            traceback.print_exc()
+            return np.zeros(len(self.rxs)), np.zeros(len(self.rxs), dtype=int), np.zeros(len(self.rxs))
+    
+    ########################################
+    # LAYER 9: METRICS & AGGREGATION
+    ########################################
+    
+    def compute_jain_fairness(self, throughputs):
+        """Compute Jain's fairness index"""
+        n = len(throughputs)
+        if n == 0:
+            return 0.0
+        numerator = np.sum(throughputs) ** 2
+        denominator = n * np.sum(throughputs ** 2) + 1e-12
+        return float(numerator / denominator)
+    
+    def run_full_simulation(self, num_slots=100):
+        """
+        Run complete system-level simulation for num_slots time slots
+        
+        Args:
+            num_slots: Number of time slots to simulate
+            
+        Returns:
+            results: Dictionary with aggregated metrics
+        """
+        print(f"\n[run_full_simulation] Starting simulation for {num_slots} slots ({self.scenario_name})...")
+        
+        all_throughputs = []
+        all_sinrs = []
+        all_path_losses = []
+        
+        # Initialize channel to None (will be filled at first snapshot)
+        h_freq = None
+        path_loss_db = None
+        valid_snapshot_idx = 0
+        
+        for slot_idx in range(num_slots):
+            # Update ray tracing snapshot periodically (or use last valid)
+            if slot_idx % self.config.SNAPSHOT_PERIOD == 0:
+                h_freq_new, path_loss_db_new, valid = self.compute_channel_snapshot()
+                if valid and h_freq_new is not None and not np.isnan(np.min(path_loss_db_new)):
+                    h_freq = h_freq_new
+                    path_loss_db = path_loss_db_new
+                    valid_snapshot_idx = slot_idx
+                    print(f"  ✓ Snapshot updated at slot {slot_idx}")
+                else:
+                    print(f"  ⚠ Ray tracing update failed at slot {slot_idx}, using snapshot from slot {valid_snapshot_idx}")
+                    # Keep using previous h_freq and path_loss_db
+            
+            # Skip if we don't have valid channel data
+            if h_freq is None or path_loss_db is None:
+                print(f"  ✗ No valid channel data at slot {slot_idx}, skipping")
+                continue
+            
+            # Schedule resources
+            scheduling = self.schedule_resources(slot_idx)
+            
+            # Compute power control
+            tx_power_dbm = self.compute_tx_power(path_loss_db, scheduling)
+            
+            # Compute SINR, MCS, and throughput
+            sinr_db, mcs_idx, throughput_mbps = self.compute_sinr_and_throughput(
+                h_freq, path_loss_db, tx_power_dbm, scheduling
+            )
+            
+            # Store results
+            all_throughputs.append(throughput_mbps)
+            all_sinrs.append(sinr_db)
+            all_path_losses.append(np.mean(path_loss_db, axis=1))
+            
+            # Update scheduler feedback
+            self.last_sinr_db = sinr_db
+            
+            if (slot_idx + 1) % 20 == 0:
+                avg_tp_recent = np.mean(all_throughputs[-10:])
+                print(f"  Slot {slot_idx+1}/{num_slots}: Avg TP = {avg_tp_recent:.1f} Mbps")
+        
+        # Aggregate results
+        throughput_array = np.array(all_throughputs)  # [num_slots, num_users]
+        sinr_array = np.array(all_sinrs)
+        path_loss_array = np.array(all_path_losses)
+        
+        # Final metrics
+        final_throughputs = throughput_array[-1, :]  # Last slot
+        avg_throughput = np.mean(throughput_array[-10:, :])  # Last 10 slots average
+        total_throughput = np.sum(final_throughputs)
+        fairness = self.compute_jain_fairness(final_throughputs)
+        avg_sinr = np.mean(sinr_array[-10:, :])
+        avg_path_loss = np.mean(path_loss_array[-10:, :])
+        
+        results = {
+            'throughputs': final_throughputs,
+            'avg_throughput': avg_throughput,
+            'total_throughput': total_throughput,
+            'fairness': fairness,
+            'sinr': np.mean(sinr_array[-1, :]),
+            'path_loss': avg_path_loss,
+            'throughput_history': throughput_array,
+            'sinr_history': sinr_array,
+            'path_loss_history': path_loss_array,
+        }
+        
+        print(f"  ✓ Simulation complete")
+        print(f"    - Avg TP (last 10 slots): {avg_throughput:.1f} Mbps")
+        print(f"    - Total TP (last slot): {total_throughput:.1f} Mbps")
+        print(f"    - Jain Fairness: {fairness:.3f}")
+        print(f"    - Avg SINR: {avg_sinr:.1f} dB")
+        
+        return results
+
+
+# ============================================================================
+# LAYER 10: VISUALIZATION
+# ============================================================================
+
+def plot_comparison_results(sim_sparse_results, sim_dense_results, output_file="interference_comparison.png"):
+    """
+    Plot Figure 1: Comparison between Sparse and Dense scenarios
+    """
+    print(f"\n[plot_comparison_results] Generating comparison figure...")
+    
+    fig, axes = plt.subplots(2, 2, figsize=(16, 10))
+    
+    # Extract data
+    tp_sparse = sim_sparse_results['throughputs']
+    tp_dense = sim_dense_results['throughputs']
+    
+    sinr_sparse = np.mean(sim_sparse_results['sinr_history'][-10:, :], axis=0)
+    sinr_dense = np.mean(sim_dense_results['sinr_history'][-10:, :], axis=0)
+    
+    pl_sparse = np.mean(sim_sparse_results['path_loss_history'][-10:, :], axis=0)
+    pl_dense = np.mean(sim_dense_results['path_loss_history'][-10:, :], axis=0)
+    
+    # Plot 1: Throughput comparison (bar chart)
+    users_sparse = np.arange(len(tp_sparse))
+    users_dense = np.arange(len(tp_dense))
+    
+    ax = axes[0, 0]
+    ax.bar(users_sparse - 0.2, tp_sparse, width=0.4, label='Sparse', alpha=0.8, color='blue')
+    ax.set_ylabel('Throughput [Mbps]', fontsize=11, fontweight='bold')
+    ax.set_xlabel('User ID', fontsize=11, fontweight='bold')
+    ax.set_title('Sparse Scenario: Throughput per User (5 UAVs)', fontsize=12, fontweight='bold')
+    ax.grid(True, alpha=0.3)
+    ax.legend()
+    
+    # Plot 2: Dense throughput
+    ax = axes[0, 1]
+    ax.bar(users_dense[:10], tp_dense[:10], width=0.8, label='Dense (first 10)', alpha=0.8, color='red')
+    ax.set_ylabel('Throughput [Mbps]', fontsize=11, fontweight='bold')
+    ax.set_xlabel('User ID', fontsize=11, fontweight='bold')
+    ax.set_title('Dense Scenario: Throughput per User (15 UAVs - showing 10)', fontsize=12, fontweight='bold')
+    ax.grid(True, alpha=0.3)
+    ax.legend()
+    
+    # Plot 3: SINR comparison - Simple bar chart with averages
+    ax = axes[1, 0]
+    
+    # Calculate valid SINR values (remove NaNs)
+    sinr_sparse_valid = sim_sparse_results['sinr_history'][~np.isnan(sim_sparse_results['sinr_history'])]
+    sinr_dense_valid = sim_dense_results['sinr_history'][~np.isnan(sim_dense_results['sinr_history'])]
+    
+    avg_sinr_sparse = np.nanmean(sinr_sparse_valid) if len(sinr_sparse_valid) > 0 else 0
+    avg_sinr_dense = np.nanmean(sinr_dense_valid) if len(sinr_dense_valid) > 0 else 0
+    
+    # Create bar chart with error bars showing min/max
+    scenarios = ['Sparse\n(5 UAVs)', 'Dense\n(15 UAVs)']
+    sinr_values = [avg_sinr_sparse, avg_sinr_dense]
+    
+    # Calculate min/max for error bars
+    min_sparse = np.nanmin(sinr_sparse_valid) if len(sinr_sparse_valid) > 0 else avg_sinr_sparse
+    max_sparse = np.nanmax(sinr_sparse_valid) if len(sinr_sparse_valid) > 0 else avg_sinr_sparse
+    min_dense = np.nanmin(sinr_dense_valid) if len(sinr_dense_valid) > 0 else avg_sinr_dense
+    max_dense = np.nanmax(sinr_dense_valid) if len(sinr_dense_valid) > 0 else avg_sinr_dense
+    
+    errors = [
+        [avg_sinr_sparse - min_sparse, avg_sinr_dense - min_dense],
+        [max_sparse - avg_sinr_sparse, max_dense - avg_sinr_dense]
+    ]
+    
+    colors = ['#1f77b4', '#d62728']  # Blue for Sparse, Red for Dense
+    bars = ax.bar(scenarios, sinr_values, color=colors, alpha=0.7, width=0.6, 
+                  yerr=errors, capsize=10, error_kw={'elinewidth': 2})
+    
+    # Add value labels on bars
+    for i, (bar, val) in enumerate(zip(bars, sinr_values)):
+        height = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width()/2., height + 0.5,
+               f'{val:.1f} dB', ha='center', va='bottom', fontweight='bold', fontsize=12)
+    
+    ax.set_ylabel('SINR [dB]', fontsize=11, fontweight='bold')
+    ax.set_title('SINR Comparison: System Average', fontsize=12, fontweight='bold')
+    ax.set_ylim([0, max(sinr_values) + 3])
+    ax.grid(True, alpha=0.3, axis='y')
+    
+    # Add info text
+    ax.text(0.5, 0.95, f'Sparse range: {min_sparse:.1f} - {max_sparse:.1f} dB\nDense range: {min_dense:.1f} - {max_dense:.1f} dB',
+           transform=ax.transAxes, ha='center', va='top', fontsize=9,
+           bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+    
+    # Plot 4: Summary metrics table
+    ax = axes[1, 1]
+    ax.axis('off')
+    
+    summary_text = f"""
+╔════════════════════════════════════════════════╗
+║           SCENARIO COMPARISON RESULTS          ║
+╠════════════════════════════════════════════════╣
+║ SPARSE (5 UAVs):                               ║
+║   • Total Throughput: {sim_sparse_results['total_throughput']:.1f} Mbps     ║
+║   • Avg per user: {np.mean(tp_sparse):.1f} Mbps              ║
+║   • Fairness: {sim_sparse_results['fairness']:.3f}                ║
+║   • Avg SINR: {np.mean(sinr_sparse):.1f} dB                 ║
+║   • Avg Path Loss: {np.mean(pl_sparse):.1f} dB         ║
+║                                                ║
+║ DENSE (15 UAVs):                               ║
+║   • Total Throughput: {sim_dense_results['total_throughput']:.1f} Mbps     ║
+║   • Avg per user: {np.mean(tp_dense):.1f} Mbps               ║
+║   • Fairness: {sim_dense_results['fairness']:.3f}                ║
+║   • Avg SINR: {np.mean(sinr_dense):.1f} dB                 ║
+║   • Avg Path Loss: {np.mean(pl_dense):.1f} dB         ║
+║                                                ║
+║ CONCLUSION:                                    ║
+║   Dense has {"MORE" if sim_dense_results['total_throughput'] > sim_sparse_results['total_throughput'] else "LESS"} total TP,      ║
+║   but WORSE fairness ({sim_dense_results['fairness']:.3f} vs {sim_sparse_results['fairness']:.3f})       ║
+╚════════════════════════════════════════════════╝
+"""
+    
+    ax.text(0.05, 0.95, summary_text, transform=ax.transAxes,
+           fontsize=10, verticalalignment='top', fontfamily='monospace',
+           bbox=dict(boxstyle='round', facecolor='lightyellow', alpha=0.9))
+    
+    fig.suptitle('Interference Analysis: Sparse vs Dense UAV Scenarios', 
+                fontsize=14, fontweight='bold')
+    plt.tight_layout()
+    plt.savefig(output_file, dpi=150, bbox_inches='tight')
+    print(f"  ✓ Saved: {output_file}")
+    plt.close()
+
+def plot_3d_renders(sim_sparse, sim_dense, output_file="interference_3d_positioning.png"):
+    """
+    Generate Figure 2: Real 3D Ray Tracing renders for each scenario
+    Uses Sionna scene.render() to visualize actual ray paths and UAV positions
+    """
+    print(f"\n[plot_3d_renders] Generating 3D ray tracing renders...")
+    
+    try:
+        fig = plt.figure(figsize=(16, 7))
+        
+        # =========== SPARSE SCENARIO RENDER ===========
+        print("  Rendering sparse scenario (5 UAVs)...")
+        try:
+            # Get first UAV from sparse scenario
+            sim_sparse.scene.frequency = RF_Config.CARRIER_FREQUENCY
+            
+            # Select first UAV for render
+            first_uav_idx = 0
+            first_rx = sim_sparse.rxs[first_uav_idx]
+            
+            # Make TX look at this RX
+            sim_sparse.tx.look_at(first_rx)
+            
+            # Compute paths for this UAV
+            paths_sparse = PathSolver()(sim_sparse.scene)
+            
+            if paths_sparse is not None:
+                # Render scene from camera positioned to see gNB and UAVs
+                # Camera positioned above and to the side of scenario area
+                cam_pos = np.array([150.0, 150.0, 120.0])
+                cam = Camera(position=cam_pos)
+                cam.look_at(sim_sparse.tx)  # Look at gNB
+                
+                # Render: reduce samples for speed
+                bitmap_sparse = sim_sparse.scene.render(
+                    camera=cam, 
+                    paths=paths_sparse, 
+                    return_bitmap=True,
+                    num_samples=16  # Reduced for speed
+                )
+                
+                # Convert bitmap to numpy array
+                img_sparse = np.array(bitmap_sparse)
+                
+                # Ensure uint8 format for display
+                if img_sparse.dtype != np.uint8:
+                    if np.issubdtype(img_sparse.dtype, np.floating):
+                        img_sparse = (np.clip(img_sparse, 0, 1) * 255).astype(np.uint8)
+                    else:
+                        img_sparse = img_sparse.astype(np.uint8)
+                
+                # Drop alpha channel if present
+                if len(img_sparse.shape) == 3 and img_sparse.shape[2] == 4:
+                    img_sparse = img_sparse[:, :, :3]
+                
+                ax1 = fig.add_subplot(121)
+                ax1.imshow(img_sparse)
+                ax1.set_title(f'SPARSE Scenario (5 UAVs)\nRay Tracing Render', 
+                            fontsize=12, fontweight='bold')
+                ax1.axis('off')
+            else:
+                ax1 = fig.add_subplot(121)
+                ax1.text(0.5, 0.5, 'Sparse Render Failed\n(No paths found)', 
+                        ha='center', va='center', fontsize=14, color='red', 
+                        transform=ax1.transAxes)
+                ax1.axis('off')
+                
+        except Exception as e:
+            print(f"    ✗ Sparse render error: {e}")
+            ax1 = fig.add_subplot(121)
+            ax1.text(0.5, 0.5, f'Sparse Render Error\n{str(e)[:50]}', 
+                    ha='center', va='center', fontsize=11, color='red',
+                    transform=ax1.transAxes)
+            ax1.axis('off')
+        
+        # =========== DENSE SCENARIO RENDER ===========
+        print("  Rendering dense scenario (15 UAVs)...")
+        try:
+            # Get first UAV from dense scenario
+            sim_dense.scene.frequency = RF_Config.CARRIER_FREQUENCY
+            
+            # Select first UAV for render
+            first_uav_idx = 0
+            first_rx_d = sim_dense.rxs[first_uav_idx]
+            
+            # Make TX look at this RX
+            sim_dense.tx.look_at(first_rx_d)
+            
+            # Compute paths for this UAV
+            paths_dense = PathSolver()(sim_dense.scene)
+            
+            if paths_dense is not None:
+                # Render scene from same camera position
+                cam_pos = np.array([150.0, 150.0, 120.0])
+                cam = Camera(position=cam_pos)
+                cam.look_at(sim_dense.tx)  # Look at gNB
+                
+                # Render
+                bitmap_dense = sim_dense.scene.render(
+                    camera=cam,
+                    paths=paths_dense,
+                    return_bitmap=True,
+                    num_samples=16  # Reduced for speed
+                )
+                
+                # Convert bitmap to numpy array
+                img_dense = np.array(bitmap_dense)
+                
+                # Ensure uint8 format
+                if img_dense.dtype != np.uint8:
+                    if np.issubdtype(img_dense.dtype, np.floating):
+                        img_dense = (np.clip(img_dense, 0, 1) * 255).astype(np.uint8)
+                    else:
+                        img_dense = img_dense.astype(np.uint8)
+                
+                # Drop alpha channel if present
+                if len(img_dense.shape) == 3 and img_dense.shape[2] == 4:
+                    img_dense = img_dense[:, :, :3]
+                
+                ax2 = fig.add_subplot(122)
+                ax2.imshow(img_dense)
+                ax2.set_title(f'DENSE Scenario (15 UAVs)\nRay Tracing Render', 
+                            fontsize=12, fontweight='bold')
+                ax2.axis('off')
+            else:
+                ax2 = fig.add_subplot(122)
+                ax2.text(0.5, 0.5, 'Dense Render Failed\n(No paths found)', 
+                        ha='center', va='center', fontsize=14, color='red',
+                        transform=ax2.transAxes)
+                ax2.axis('off')
+                
+        except Exception as e:
+            print(f"    ✗ Dense render error: {e}")
+            ax2 = fig.add_subplot(122)
+            ax2.text(0.5, 0.5, f'Dense Render Error\n{str(e)[:50]}',
+                    ha='center', va='center', fontsize=11, color='red',
+                    transform=ax2.transAxes)
+            ax2.axis('off')
+        
+        fig.suptitle('3D Ray Tracing Visualization: Sparse vs Dense UAV Scenarios', 
+                    fontsize=14, fontweight='bold')
+        plt.tight_layout()
+        plt.savefig(output_file, dpi=150, bbox_inches='tight')
+        print(f"  ✓ Saved: {output_file}")
+        plt.close()
+        
+    except Exception as e:
+        print(f"  ✗ Error generating 3D renders: {e}")
+        traceback.print_exc()
+
+
+# ============================================================================
+# MAIN: FULL SIMULATION
+# ============================================================================
+
+if __name__ == "__main__":
+    print("\n" + "="*80)
+    print("FULL SYSTEM-LEVEL SIMULATION: Sparse vs Dense UAV Scenarios")
+    print("="*80)
+    
+    # Run sparse scenario simulation
+    print("\n[SIMULATION] SPARSE Scenario (5 UAVs, 100 time slots)...")
+    try:
+        sim_sparse = InterferenceSimulator(ScenarioConfig_Sparse, scenario_name="Sparse")
+        results_sparse = sim_sparse.run_full_simulation(num_slots=100)
+        print("✓ Sparse simulation complete")
+    except Exception as e:
+        print(f"✗ Error with sparse simulation: {e}")
+        traceback.print_exc()
+        results_sparse = None
+    
+    # Run dense scenario simulation
+    print("\n[SIMULATION] DENSE Scenario (15 UAVs, 100 time slots)...")
+    try:
+        sim_dense = InterferenceSimulator(ScenarioConfig_Dense, scenario_name="Dense")
+        results_dense = sim_dense.run_full_simulation(num_slots=100)
+        print("✓ Dense simulation complete")
+    except Exception as e:
+        print(f"✗ Error with dense simulation: {e}")
+        traceback.print_exc()
+        results_dense = None
+    
+    # Generate comparison figure
+    if results_sparse and results_dense:
+        print("\n[VISUALIZATION] Generating comparison figure...")
+        try:
+            plot_comparison_results(results_sparse, results_dense, 
+                                   output_file="interference_comparison.png")
+            print("✓ Visualization complete")
+        except Exception as e:
+            print(f"✗ Error generating visualization: {e}")
+            traceback.print_exc()
+        
+        # Generate 3D positioning figure
+        print("\n[VISUALIZATION] Generating 3D positioning figure...")
+        try:
+            plot_3d_renders(sim_sparse, sim_dense, 
+                           output_file="interference_3d_positioning.png")
+            print("✓ 3D positioning figure complete")
+        except Exception as e:
+            print(f"✗ Error generating 3D renders: {e}")
+            traceback.print_exc()
+    
+    print("\n" + "="*80)
+    print("SIMULATION COMPLETE")
+    print("="*80)
+    print("\nGenerated files:")
+    print("  • interference_comparison.png       (Figure 1: Metrics comparison)")
+    print("  • interference_3d_positioning.png   (Figure 2: UAV positions)")
+    print("\nExpected results:")
+    print("  ✓ Sparse: Higher fairness, lower total TP (fewer users)")
+    print("  ✓ Dense: Lower fairness, higher total TP (more users competing)")
