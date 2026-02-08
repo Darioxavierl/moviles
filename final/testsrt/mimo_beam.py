@@ -54,12 +54,8 @@ class MIMO_Configuration:
 """
 
 # CONFIGURACIONES ESTÁNDAR 5G NR - EXPLÍCITAS
+# NOTA: SISO eliminado (equivalente para las 3 técnicas, sin valor comparativo)
 MIMO_CONFIGS = {
-    "SISO": MIMO_Configuration(
-        name="SISO (1x1)",
-        tx_rows=1, tx_cols=1, rx_rows=1, rx_cols=1,
-        description="Single antenna TX and RX. No beamforming, no diversity, no spatial multiplexing."
-    ),
     "MIMO_2x2": MIMO_Configuration(
         name="MIMO 2x2 (SU-MIMO)",
         tx_rows=2, tx_cols=2, rx_rows=2, rx_cols=2,
