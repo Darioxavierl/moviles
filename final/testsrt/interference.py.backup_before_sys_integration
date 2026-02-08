@@ -10,9 +10,10 @@ import numpy as np
 import sionna
 from sionna.rt import Transmitter, Receiver, PathSolver, PlanarArray, load_scene, Camera
 from sionna.sys import (
+    get_pathloss, PFSchedulerSUMIMO, EESM, 
+    OuterLoopLinkAdaptation, PHYAbstraction,
     open_loop_uplink_power_control
 )
-from sionna.phy.utils import db_to_lin, lin_to_db
 import matplotlib.pyplot as plt
 import traceback
 import os
@@ -49,7 +50,7 @@ class RF_Config:
     
     print(f"\n[RF_Config] NUM_RBS = {NUM_RBS}, NUM_SUBCARRIERS = {NUM_SUBCARRIERS}")
 
-    USERS_SEED = 67                   # Seed for reproducible user placement
+    USERS_SEED = 63                   # Seed for reproducible user placement
 
 
 
@@ -118,15 +119,13 @@ class InterferenceSimulator:
         self.scheduler = None
         self.last_sinr_db = None
         
-        # Results storage (expanded with Sionna SYS metrics)
+        # Results storage
         self.results = {
             'throughput_per_user': [],
             'sinr_per_user': [],
-            'sinr_eff_per_user': [],  # NEW: Effective SINR
             'path_loss_per_user': [],
             'mcs_per_user': [],
-            'bler_per_user': [],  # NEW: Block error rate
-            'tbler_per_user': [],  # NEW: Transport block error rate
+            'bler_per_user': [],
         }
         
         print(f"\n[InterferenceSimulator] Initialized for scenario: {scenario_config.NAME} ({scenario_config.NUM_USERS} users)")
@@ -368,7 +367,10 @@ class InterferenceSimulator:
             num_users = len(self.rxs)
             num_rbs = RF_Config.NUM_RBS
             
-            # Simple equal RB distribution per user
+            # Proportional Fair: allocate RBs proportionally to channel quality
+            # For now, use equal distribution (real PF would use metrics)
+            # TODO: Integrate PFSchedulerSUMIMO once API is clear
+            
             scheduling = np.zeros([num_users, num_rbs], dtype=np.float32)
             
             # Equal RB distribution
@@ -397,65 +399,38 @@ class InterferenceSimulator:
             return scheduling
     
     ########################################
-    # LAYER 5: POWER CONTROL (Sionna SYS)
+    # LAYER 5: POWER CONTROL
     ########################################
     
     def compute_tx_power(self, path_loss_db, scheduling):
         """
-        Compute TX power using Sionna SYS open-loop uplink power control
-        3GPP TS 38.213 compliant
+        Compute TX power using open-loop control based on path loss
         
         Args:
-            path_loss_db: [num_users, num_subcarriers] or [num_users] path loss in dB
+            path_loss_db: [num_users, num_subcarriers] path loss in dB
             scheduling: [num_users, num_rbs] resource allocation
             
         Returns:
-            tx_power_dbm: [num_users] TX power in dBm per user
+            tx_power_dbm: [num_users] TX power in dBm
         """
         try:
             num_users = len(self.rxs)
             
-            # Average path loss per user
-            if len(path_loss_db.shape) == 2:
-                path_loss_avg_db = np.mean(path_loss_db, axis=1)  # [num_users]
-            else:
-                path_loss_avg_db = path_loss_db
+            # Average path loss per user across subcarriers
+            path_loss_avg = np.mean(path_loss_db, axis=1)  # [num_users]
             
-            # Convert to linear
-            path_loss_lin = db_to_lin(path_loss_avg_db)
+            # Target received power at gNB (typical uplink: -80 to -100 dBm)
+            # Higher target = needs more TX power
+            target_rx_power_dbm = -90  # dBm (typical for uplink)
             
-            # Count allocated subcarriers per user
-            num_allocated_sc = np.sum(scheduling, axis=1)  # [num_users]
+            # TX power = target_rx - path_loss + headroom
+            # Note: path_loss is positive, so we ADD it to target
+            # Formula: P_tx = P_rx_target + PL
+            tx_power_dbm = target_rx_power_dbm + path_loss_avg + 5  # 5 dB headroom
             
-            # Use Sionna SYS open-loop power control (3GPP compliant)
-            tx_power_w = open_loop_uplink_power_control(
-                pathloss=tf.convert_to_tensor(path_loss_lin, dtype=tf.float32),
-                num_allocated_subcarriers=tf.convert_to_tensor(num_allocated_sc, dtype=tf.int32),
-                alpha=0.8,          # Pathloss compensation factor (typical: 0.7-1.0)
-                p0_dbm=-90.0,       # Target RX power per PRB [dBm]
-                ut_max_power_dbm=26.0,  # Max UE power (typical: 23-30 dBm)
-                precision=None
-            )
+            # Clip to realistic UE power levels (0-24 dBm, typical max 23 dBm)
+            tx_power_dbm = np.clip(tx_power_dbm, 0, 23)
             
-            # Convert to dBm
-            tx_power_dbm = lin_to_db(tx_power_w.numpy()) + 30  # 30 for W->dBm conversion
-            
-            return tx_power_dbm.numpy().flatten()
-            
-        except Exception as e:
-            print(f"  ✗ TX power control error: {e}")
-            traceback.print_exc()
-            # Fallback: simple calculation
-            if len(path_loss_db.shape) == 2:
-                path_loss_avg = np.mean(path_loss_db, axis=1)
-            else:
-                path_loss_avg = path_loss_db
-            tx_power_dbm = -90 + path_loss_avg + 5  # Fallback formula
-            return np.clip(tx_power_dbm, 0, 26)
-    
-    ########################################
-    # LAYER 6: LINK ADAPTATION (Sionna SYS)
-    ########################################
             return tx_power_dbm
             
         except Exception as e:
@@ -469,105 +444,143 @@ class InterferenceSimulator:
     
     def compute_sinr_and_throughput(self, h_freq, path_loss_db, tx_power_dbm, scheduling):
         """
-        Compute SINR, MCS, BLER using Sionna SYS (SIMPLIFIED for performance)
-        Avoid per-user EESM calls - use aggregated version
+        Compute SINR per user using multi-subcarrier/multi-layer aggregation (EESM)
+        Then select MCS and compute throughput
         
         Args:
-            h_freq, path_loss_db, tx_power_dbm, scheduling
+            h_freq: [num_users, num_tx_ant, num_subcarriers] channel
+            path_loss_db: [num_users, num_subcarriers] path loss per subcarrier
+            tx_power_dbm: [num_users] TX power
+            scheduling: [num_users, num_rbs] resource allocation
             
         Returns:
-            sinr_db, sinr_eff_db, mcs_indices, bler, throughput_mbps
+            sinr_db: [num_users] effective SINR
+            mcs_indices: [num_users] MCS selection
+            throughput_mbps: [num_users] throughput in Mbps
         """
         try:
             num_users = len(self.rxs)
+            num_subcarriers = h_freq.shape[-1]
             
-            # Noise power calculation
+            # Ensure shapes are correct
+            assert h_freq.shape[0] == num_users
+            assert path_loss_db.shape[0] == num_users
+            assert tx_power_dbm.shape[0] == num_users
+            
+            # Noise power calculation (correct)
             nf_db = RF_Config.NOISE_FIGURE_DB
-            noise_psd_dbm_per_hz = -174
-            noise_power_dbm_total = noise_psd_dbm_per_hz + 10 * np.log10(RF_Config.BANDWIDTH) + nf_db
-            noise_power_w = 10 ** ((noise_power_dbm_total - 30) / 10)
+            # Noise PSD: -174 dBm/Hz + NF + 10*log10(BW)
+            noise_psd_dbm_per_hz = -174  # dBm/Hz
+            noise_power_dbm_total = noise_psd_dbm_per_hz + 10 * np.log10(RF_Config.BANDWIDTH) + nf_db  # dBm total
+            noise_power_w = 10 ** ((noise_power_dbm_total - 30) / 10)  # Convert dBm to Watts correctly
+            
+            # Debug: print noise power
+            # print(f"  [DEBUG] Noise power: {noise_power_dbm_total:.1f} dBm = {noise_power_w:.3e} W")
             
             sinr_db_all = []
-            sinr_eff_db_all = []
             mcs_indices_all = []
-            bler_all = []
             throughput_all = []
             
             for u in range(num_users):
-                # Calculate raw SINR
+                # Average path loss across subcarriers for this user (in dB)
                 path_loss_avg_db = np.mean(path_loss_db[u, :])
+                
+                # Simple SINR calculation
+                # RX_power_dBm = TX_power_dBm - Path_Loss_dB
                 rx_power_dbm = float(tx_power_dbm[u] - path_loss_avg_db)
-                rx_power_w = 10 ** ((rx_power_dbm - 30) / 10)
-                sinr_linear = rx_power_w / (noise_power_w + 1e-15)
+                rx_power_w = 10 ** ((rx_power_dbm - 30) / 10)  # Convert to Watts
+                
+                # SINR = RX_Power / (Noise + Interference)
+                sinr_linear = rx_power_w / (noise_power_w + 1e-15)  # Initially no interference
+                sinr_db_no_int = 10 * np.log10(sinr_linear + 1e-12)
+                
+                # Add interference from other users on overlapping RBs
+                interference_dbm = -200  # Start with very low interference
+                for u2 in range(num_users):
+                    if u2 == u:
+                        continue
+                    # Check overlap in RBs
+                    overlap_rbs = float(np.sum(scheduling[u, :] * scheduling[u2, :]))
+                    if overlap_rbs > 0:
+                        # Interferer's RX power at this location (same path loss approximation)
+                        path_loss_u2_db = np.mean(path_loss_db[u2, :])
+                        tx_pw_u2_dbm = float(tx_power_dbm[u2])
+                        
+                        # Interferer's RX power at receiver location (simplified: same path loss)
+                        rx_power_u2_dbm = tx_pw_u2_dbm - path_loss_u2_db
+                        
+                        # Fraction of interference based on RB overlap
+                        overlap_fraction = overlap_rbs / (np.sum(scheduling[u, :]) + 1e-6)
+                        
+                        # Accumulate interference (in linear scale)
+                        rx_power_u2_w = 10 ** ((rx_power_u2_dbm - 30) / 10)
+                        interference_power_this = rx_power_u2_w * overlap_fraction * 0.5  # 0.5 = interference factor
+                        
+                        # Accumulate in dB
+                        if interference_dbm < -150:
+                            interference_dbm = 10 * np.log10(interference_power_this + 1e-15) + 30
+                        else:
+                            interference_w = 10 ** ((interference_dbm - 30) / 10)
+                            total_interference_w = interference_w + interference_power_this
+                            interference_dbm = 10 * np.log10(total_interference_w + 1e-15) + 30
+                
+                # Convert interference to watts
+                if interference_dbm > -150:
+                    interference_w = 10 ** ((interference_dbm - 30) / 10)
+                else:
+                    interference_w = 1e-15
+                
+                # Final SINR with interference
+                sinr_linear = rx_power_w / (noise_power_w + interference_w + 1e-15)
                 sinr_db = 10 * np.log10(sinr_linear + 1e-12)
-                sinr_db = float(np.clip(sinr_db, -20, 50))
+                sinr_db = float(np.clip(sinr_db, -20, 50))  # Clip to reasonable range (-20 to +50 dB)
+                
                 sinr_db_all.append(sinr_db)
                 
-                # SIMPLIFIED EESM: Just use raw SINR as effective (avoid per-user overhead)
-                sinr_eff_db = sinr_db
-                sinr_eff_db_all.append(sinr_eff_db)
-                
-                # Link adaptation: simplified (use standard MCS table)
+                # LAYER 7: MCS Selection (simplified)
                 mcs_lut = np.array([-10, -8, -6, -4, -2, 0, 2, 4, 6, 8, 10, 12, 14, 16, 18,
                                    20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44])
-                mcs_idx = int(np.searchsorted(mcs_lut, sinr_eff_db))
+                mcs_idx = int(np.searchsorted(mcs_lut, sinr_db))
                 mcs_idx = int(np.clip(mcs_idx, 0, 27))
                 mcs_indices_all.append(mcs_idx)
                 
-                # PHY abstraction: simplified (use spectral efficiency table instead of full PHY abs)
+                # LAYER 8: PHY Abstraction (Spectral Efficiency from MCS)
                 se_per_mcs = np.array([0.23, 0.31, 0.38, 0.44, 0.51, 0.61, 0.71, 0.81, 0.90, 1.00,
                                       1.21, 1.41, 1.61, 1.81, 1.91, 2.21, 2.41, 2.61, 2.81, 3.01,
                                       3.31, 3.61, 3.91, 4.21, 4.51, 4.81, 5.11, 5.41])
+                
                 se = float(se_per_mcs[min(mcs_idx, len(se_per_mcs)-1)])
                 
-                # Estimate BLER from SINR margin
-                mcs_lut = np.array([-10, -8, -6, -4, -2, 0, 2, 4, 6, 8, 10, 12, 14, 16, 18,
-                                   20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44])
-                mcs_threshold = float(mcs_lut[min(mcs_idx, len(mcs_lut)-1)])
-                margin = sinr_eff_db - mcs_threshold
-                
+                # BLER penalty (simplified)
+                mcs_threshold_sinr = float(mcs_lut[min(mcs_idx, len(mcs_lut)-1)])
+                margin = sinr_db - mcs_threshold_sinr
                 if margin > 5:
-                    bler_val = 1e-4
+                    bler = 1e-4
                 elif margin > 2:
-                    bler_val = 0.01
+                    bler = 0.01
                 elif margin > 0:
-                    bler_val = 0.05
+                    bler = 0.05
                 elif margin > -2:
-                    bler_val = 0.1
+                    bler = 0.1
                 else:
-                    bler_val = 0.5
+                    bler = 0.5
                 
-                bler_all.append(bler_val)
+                # Effective SE after retransmissions
+                se_effective = se * (1 - bler)
                 
-                # Throughput
-                se_effective = se * (1 - bler_val)
+                # Throughput = SE × allocated_bandwidth
                 num_rbs_allocated = float(np.sum(scheduling[u, :]))
                 bw_allocated_hz = num_rbs_allocated * 12 * RF_Config.SUBCARRIER_SPACING
-                throughput = se_effective * bw_allocated_hz / 1e6
+                
+                throughput = se_effective * bw_allocated_hz / 1e6  # Mbps
                 throughput_all.append(throughput)
             
-            # Store MCS for next slot
-            self.mcs_last_slot = np.array(mcs_indices_all)
-            
-            return (
-                np.array(sinr_db_all),
-                np.array(sinr_eff_db_all),
-                np.array(mcs_indices_all, dtype=int),
-                np.array(bler_all),
-                np.array(throughput_all)
-            )
+            return np.array(sinr_db_all), np.array(mcs_indices_all, dtype=int), np.array(throughput_all)
             
         except Exception as e:
             print(f"  ✗ SINR/Throughput calculation error: {e}")
             traceback.print_exc()
-            num_users = len(self.rxs)
-            return (
-                np.zeros(num_users),
-                np.zeros(num_users),
-                np.full(num_users, 15, dtype=int),
-                np.full(num_users, 0.1),
-                np.zeros(num_users)
-            )
+            return np.zeros(len(self.rxs)), np.zeros(len(self.rxs), dtype=int), np.zeros(len(self.rxs))
     
     ########################################
     # LAYER 9: METRICS & AGGREGATION
@@ -627,18 +640,18 @@ class InterferenceSimulator:
             # Compute power control
             tx_power_dbm = self.compute_tx_power(path_loss_db, scheduling)
             
-            # Compute SINR, MCS, and throughput (now with Sionna SYS)
-            sinr_db, sinr_eff_db, mcs_idx, bler, throughput_mbps = self.compute_sinr_and_throughput(
+            # Compute SINR, MCS, and throughput
+            sinr_db, mcs_idx, throughput_mbps = self.compute_sinr_and_throughput(
                 h_freq, path_loss_db, tx_power_dbm, scheduling
             )
             
             # Store results
             all_throughputs.append(throughput_mbps)
-            all_sinrs.append(sinr_eff_db)  # Use effective SINR for analysis
+            all_sinrs.append(sinr_db)
             all_path_losses.append(np.mean(path_loss_db, axis=1))
             
             # Update scheduler feedback
-            self.last_sinr_db = sinr_eff_db
+            self.last_sinr_db = sinr_db
             
             if (slot_idx + 1) % 20 == 0:
                 avg_tp_recent = np.mean(all_throughputs[-10:])

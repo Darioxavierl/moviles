@@ -10,7 +10,9 @@ import numpy as np
 import sionna
 from sionna.rt import Transmitter, Receiver, PathSolver, PlanarArray, load_scene, Camera
 from sionna.sys import (
-    open_loop_uplink_power_control
+    get_pathloss, PFSchedulerSUMIMO, EESM, 
+    OuterLoopLinkAdaptation, PHYAbstraction,
+    open_loop_uplink_power_control, InnerLoopLinkAdaptation
 )
 from sionna.phy.utils import db_to_lin, lin_to_db
 import matplotlib.pyplot as plt
@@ -49,7 +51,7 @@ class RF_Config:
     
     print(f"\n[RF_Config] NUM_RBS = {NUM_RBS}, NUM_SUBCARRIERS = {NUM_SUBCARRIERS}")
 
-    USERS_SEED = 67                   # Seed for reproducible user placement
+    USERS_SEED = 42                   # Seed for reproducible user placement
 
 
 
@@ -117,6 +119,21 @@ class InterferenceSimulator:
         # Scheduler
         self.scheduler = None
         self.last_sinr_db = None
+        
+        # Sionna SYS Components (NEW)
+        self.eesm = EESM()  # Effective SINR mapping
+        self.phy_abs = PHYAbstraction()  # Physical layer abstraction
+        self.illa = InnerLoopLinkAdaptation(
+            phy_abstraction=self.phy_abs,
+            bler_target=RF_Config.TARGET_BLER
+        )
+        self.pf_scheduler = PFSchedulerSUMIMO(
+            num_ut=scenario_config.NUM_USERS,
+            num_freq_res=RF_Config.NUM_RBS,
+            num_ofdm_sym=14,  # 5G NR: 14 symbols per slot
+            num_streams_per_ut=1,
+            beta=0.98
+        )
         
         # Results storage (expanded with Sionna SYS metrics)
         self.results = {
@@ -368,7 +385,10 @@ class InterferenceSimulator:
             num_users = len(self.rxs)
             num_rbs = RF_Config.NUM_RBS
             
-            # Simple equal RB distribution per user
+            # Proportional Fair: allocate RBs proportionally to channel quality
+            # For now, use equal distribution (real PF would use metrics)
+            # TODO: Integrate PFSchedulerSUMIMO once API is clear
+            
             scheduling = np.zeros([num_users, num_rbs], dtype=np.float32)
             
             # Equal RB distribution

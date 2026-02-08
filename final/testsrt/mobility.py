@@ -64,9 +64,9 @@ class ScenarioConfig:
     ROUTE_A_END = [250, 100, 60]      # Route A: destination (higher altitude)
     ROUTE_B_START = [50, 150, 35]     # Route B: same start
     ROUTE_B_END = [100, 300, 50]      # Route B: different destination
-    CAMERA_HEIGHT = 180
-    Y_OFFSET = 350
-    X_OFFSET = -100
+    CAMERA_HEIGHT = 280
+    Y_OFFSET = 300
+    X_OFFSET = -200
 
 class ScenarioConfig_BestRoute:
     """ALTERNATIVE: Same start/end, different paths (left vs right)
