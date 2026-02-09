@@ -49,7 +49,7 @@ class RF_Config:
     
     print(f"\n[RF_Config] NUM_RBS = {NUM_RBS}, NUM_SUBCARRIERS = {NUM_SUBCARRIERS}")
 
-    USERS_SEED = 67                   # Seed for reproducible user placement
+    USERS_SEED = 45                   # Seed for reproducible user placement
 
 
 

@@ -756,9 +756,9 @@ if __name__ == "__main__":
     # Configuration
     MIMO_CONFIG = "MIMO_4x4"
     BEAMFORMING = "SVD"  # or "ZF"
-    NUM_HEIGHTS = 5
-    HEIGHT_MIN = 14
-    HEIGHT_MAX = 120  # Reduced from 150 to avoid GPU memory exhaustion at extreme heights
+    NUM_HEIGHTS = 6
+    HEIGHT_MIN = 10
+    HEIGHT_MAX = 50  # Reduced from 150 to avoid GPU memory exhaustion at extreme heights
     
     print(f"\n{'#'*70}")
     print(f"# 5G NR MIMO UAV HEIGHT ANALYSIS")
