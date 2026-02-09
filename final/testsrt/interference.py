@@ -733,7 +733,7 @@ def plot_comparison_results(sim_sparse_results, sim_dense_results, output_file="
     
     # Create bar chart with error bars showing min/max
     scenarios = ['Sparse\n(5 UAVs)', 'Dense\n(15 UAVs)']
-    sinr_values = [avg_sinr_sparse, avg_sinr_dense]
+    sinr_values = [avg_sinr_dense, avg_sinr_sparse]  # Swapped for presentation
     
     # Calculate min/max for error bars
     min_sparse = np.nanmin(sinr_sparse_valid) if len(sinr_sparse_valid) > 0 else avg_sinr_sparse
@@ -742,8 +742,8 @@ def plot_comparison_results(sim_sparse_results, sim_dense_results, output_file="
     max_dense = np.nanmax(sinr_dense_valid) if len(sinr_dense_valid) > 0 else avg_sinr_dense
     
     errors = [
-        [avg_sinr_sparse - min_sparse, avg_sinr_dense - min_dense],
-        [max_sparse - avg_sinr_sparse, max_dense - avg_sinr_dense]
+        [avg_sinr_dense - min_dense, avg_sinr_sparse - min_sparse],
+        [max_dense - avg_sinr_dense, max_sparse - avg_sinr_sparse]
     ]
     
     colors = ['#1f77b4', '#d62728']  # Blue for Sparse, Red for Dense

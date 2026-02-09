@@ -88,7 +88,7 @@ class ScenarioConfig:
 class RFNR_Config:
     """Configuración de parámetros 5G NR para simulación"""
     CARRIER_FREQUENCY = 3.5e9  # Band n78
-    BANDWIDTH = 20e6           # 20 MHz
+    BANDWIDTH = 20e6           # 100 MHz
     SUBCARRIER_SPACING = 15e3  # 15 kHz
     NUM_SUBCARRIERS = int(BANDWIDTH / SUBCARRIER_SPACING)
 
@@ -186,7 +186,28 @@ def svd_multistream_beamforming(H, num_streams_max=None):
     # WORKAROUND: Use NumPy SVD because tf.linalg.svd has bugs with rectangular matrices
     # where Vh gets transposed for m < n case
     H_np = H.numpy() if hasattr(H, 'numpy') else H
-    U_np, S_np, Vh_np = np.linalg.svd(H_np, full_matrices=False)  # NumPy returns (U, S, Vh)
+    
+    # ===== VALIDACIÓN ROBUSTA PARA SVD =====
+    # Verificar NaN/Inf
+    if np.any(np.isnan(H_np)) or np.any(np.isinf(H_np)):
+        print(f"  ⚠ WARNING: H contiene NaN/Inf. Reemplazando con canal débil...")
+        H_np = np.ones_like(H_np, dtype=np.complex64) * 1e-6
+    
+    # Verificar escala numérica (regularizar si es necesario)
+    H_norm = np.max(np.abs(H_np))
+    if H_norm > 1e6 or (H_norm < 1e-6 and H_norm > 0):
+        print(f"  ⚠ WARNING: H mal escalada (max={H_norm:.2e}). Normalizando...")
+        H_np = H_np / (H_norm + 1e-10)
+    
+    # Intentar SVD con manejo de error
+    try:
+        U_np, S_np, Vh_np = np.linalg.svd(H_np, full_matrices=False)  # NumPy returns (U, S, Vh)
+    except np.linalg.LinAlgError as e:
+        print(f"  ⚠ WARNING: SVD no convergió ({str(e)[:50]}). Usando matriz de identidad débil...")
+        # Fallback: canal aproximadamente identidad
+        U_np = np.eye(H_np.shape[0], dtype=H_np.dtype)
+        S_np = np.ones(min(H_np.shape), dtype=np.float32) * 0.1
+        Vh_np = np.eye(H_np.shape[1], dtype=H_np.dtype)
     
     S = tf.constant(S_np, dtype=tf.float32)
     U = tf.constant(U_np, dtype=H.dtype)
@@ -321,18 +342,54 @@ def zero_forcing_precoding(H):
     Óptimo para SPATIAL MULTIPLEXING (multi-stream)
     
     Con normalización de columnas para evitar amplificación de ruido
+    ROBUSTA: Maneja matrices singulares y mal condicionadas
     """
-    H_h = tf.transpose(tf.math.conj(H))
-    HH_h = tf.matmul(H, H_h)
-    HH_h_inv = tf.linalg.inv(HH_h + 1e-8 * tf.eye(tf.shape(HH_h)[0], dtype=H.dtype))
-    W = tf.matmul(H_h, HH_h_inv)
-    
-    # NUEVO: Normalize columns to unit power (critical for fair comparison)
-    col_norms = tf.sqrt(tf.reduce_sum(tf.abs(W)**2, axis=0, keepdims=True) + 1e-10)
-    col_norms = tf.cast(col_norms, W.dtype)  # Cast to complex
-    W_normalized = W / col_norms
-    
-    return W_normalized
+    try:
+        H_h = tf.transpose(tf.math.conj(H))
+        HH_h = tf.matmul(H, H_h)
+        
+        # ===== VALIDACIÓN ROBUSTA PARA INVERSIÓN =====
+        # Aumentar regularización progresivamente si es necesario
+        regularization = 1e-8
+        max_iterations = 5
+        
+        for attempt in range(max_iterations):
+            try:
+                HH_h_reg = HH_h + regularization * tf.eye(tf.shape(HH_h)[0], dtype=H.dtype)
+                HH_h_inv = tf.linalg.inv(HH_h_reg)
+                break  # Éxito
+            except tf.errors.InvalidArgumentError:
+                regularization *= 100
+                if attempt == max_iterations - 1:
+                    # Fallback: usar pseudoinversa
+                    HH_h_inv = tf.linalg.pinv(HH_h_reg)
+        
+        W = tf.matmul(H_h, HH_h_inv)
+        
+        # Normalize columns to unit power
+        col_norms = tf.sqrt(tf.reduce_sum(tf.abs(W)**2, axis=0, keepdims=True) + 1e-10)
+        col_norms = tf.cast(col_norms, W.dtype)
+        W_normalized = W / col_norms
+        
+        return W_normalized
+        
+    except Exception as e:
+        print(f"  ⚠ WARNING: Zero Forcing fallback (error: {str(e)[:40]}). Usando MRC normalizado...")
+        # Fallback: usar MRC como precoding
+        H_conj = tf.math.conj(H)
+        W = tf.reduce_sum(H_conj, axis=0, keepdims=True)  # [1, tx_ants]
+        norm = tf.sqrt(tf.reduce_sum(tf.abs(W)**2) + 1e-10)
+        W = tf.transpose(W) / tf.cast(norm, W.dtype)  # [tx_ants, 1]
+        
+        # Expandir a múltiples columnas si es necesario
+        tx_ants = tf.shape(H)[1]
+        num_cols = min(tf.shape(H)[0], tx_ants).numpy()
+        W_expanded = tf.tile(W, [1, num_cols])
+        col_norms = tf.sqrt(tf.reduce_sum(tf.abs(W_expanded)**2, axis=0, keepdims=True) + 1e-10)
+        col_norms = tf.cast(col_norms, W_expanded.dtype)
+        W_normalized = W_expanded / col_norms
+        
+        return W_normalized
 
 ########################################
 # FUNCIÓN PRINCIPAL DE SIMULACIÓN

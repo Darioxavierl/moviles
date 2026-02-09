@@ -73,7 +73,7 @@ MIMO_CONFIGS = {
 class RFNR_Config:
     """5G NR RF configuration"""
     CARRIER_FREQUENCY = 3.5e9  # Band n78
-    BANDWIDTH = 20e6           # 20 MHz
+    BANDWIDTH = 100e6           # 100 MHz
     SUBCARRIER_SPACING = 15e3  # 15 kHz
     NUM_SUBCARRIERS = int(BANDWIDTH / SUBCARRIER_SPACING)
 

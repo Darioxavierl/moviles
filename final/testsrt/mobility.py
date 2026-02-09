@@ -4,6 +4,7 @@ Compares throughput variation across two distinct 3D UAV trajectories
 Using Sionna ray tracing for accurate channel modeling
 """
 
+
 import tensorflow as tf
 import numpy as np
 import sionna
@@ -50,10 +51,16 @@ MIMO_CONFIG = MIMO_Configuration(
     description="4x4 Massive MIMO for UAV"
 )
 
+#MIMO_CONFIG = MIMO_Configuration(
+#        name="MIMO 4x2 (Asymmetric)",
+#        tx_rows=4, tx_cols=4, rx_rows=2, rx_cols=2,
+#        description="Asymmetric: 4x4 TX, 2x2 RX"
+#    )
+
 class RFNR_Config:
     """5G NR RF configuration"""
     CARRIER_FREQUENCY = 3.5e9  # Band n78
-    BANDWIDTH = 20e6           # 20 MHz
+    BANDWIDTH = 100e6           # 20 MHz
     SUBCARRIER_SPACING = 15e3  # 15 kHz
     NUM_SUBCARRIERS = int(BANDWIDTH / SUBCARRIER_SPACING)
 
